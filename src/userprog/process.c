@@ -77,6 +77,18 @@ static void start_process(void* file_name_) {
   struct intr_frame if_;
   bool success, pcb_success;
 
+  /* Get file name, count number of arguments */
+  char string[sizeof(file_name_) + 1];
+  strcpy(string, file_name_);
+  char* saveptr;
+  char* word = strtok_r(string, " ", &saveptr);
+  file_name = word;
+  int argc = 0;
+  while (word != NULL) {
+    argc++;
+    word = strtok_r(NULL, " ", &saveptr);
+  }
+
   /* Allocate process control block */
   struct process* new_pcb = malloc(sizeof(struct process));
   success = pcb_success = new_pcb != NULL;
@@ -101,6 +113,43 @@ static void start_process(void* file_name_) {
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
   }
+
+  /* Push arguments onto stack before program begins */
+  char* argv[argc + 1];
+  argv[argc] = NULL;
+  strcpy(string, file_name_);
+  word = strtok_r(string, " ", &saveptr);
+  int i = 0;
+  while (word != NULL) {
+    if_.esp -= sizeof(word);
+    *(if_.esp) = word;
+    argv[i] = if_.esp;
+    word = strtok_r(NULL, " ", &saveptr);
+  }
+  // add empty space for 16 byte alignment
+  int argsize = sizeof(char*) * (argc + 1) + sizeof(char**) + sizeof(int);
+  uint32_t alignment = (if_.esp - argsize) % 16;
+  if (alignment != 0) {
+    for (i = 0; i < alignment; i++) {
+      if_.esp -= 1;
+      *(if_.esp) = 0;
+    }
+  }
+
+  for (i = argc; i >= 0; i--) {
+    if_.esp -= sizeof(char*);
+    *(if_.esp) = argv[i];
+  }
+  // push argv
+  if_.esp -= sizeof(char**);
+  *(if_.esp) = if_.esp + sizeof(char**);
+  // push argc 
+  if_.esp -= sizeof(int);
+  *(if_.esp) = argc;
+  // push fake return address
+  if_.esp -= sizeof(void*);
+  *(if_.esp) = NULL;
+
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
   if (!success && pcb_success) {
