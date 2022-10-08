@@ -54,6 +54,31 @@ pid_t process_execute(const char* file_name) {
   char* fn_copy;
   tid_t tid;
 
+  //NEWCODE START
+
+  struct thread* curthread = thread_current();
+  if (curthread->pcb->child_connections = NULL) {
+    curthread->pcb->child_connections = malloc(sizeof(struct list));
+    list_init(curthread->pcb->child_connections);
+  }  
+
+  struct connection* newconnection = malloc(sizeof(struct connection));
+  struct lock* connection_lock = malloc(sizeof(struct lock));
+  lock_init(&connection_lock);
+  struct semaphore* connection_semaphore = malloc(sizeof(struct semaphore));
+  sema_init(&connection_semaphore, 0);
+  newconnection->connection_lock = connection_lock;
+  newconnection->connection_semaphore = connection_semaphore;
+  newconnection->parent_process = curthread->pcb;
+  newconnection->parent_pid = get_pid(curthread->pcb);
+  newconnection->exit_code = NULL;
+  newconnection->refcount = 1;
+  newconnection->elem = malloc(sizeof(list_elem));
+
+  struct startprocess_data* args = malloc(sizeof(struct startprocess_data));
+  args->filename = file_name;
+  args->parent_connection = newconnection;
+
   sema_init(&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -63,7 +88,8 @@ pid_t process_execute(const char* file_name) {
   strlcpy(fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create(file_name, PRI_DEFAULT, start_process, (void*) args);
+  sema_down(&newconnection->connection_semaphore);
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
   return tid;
@@ -71,8 +97,11 @@ pid_t process_execute(const char* file_name) {
 
 /* A thread function that loads a user process and starts it
    running. */
-static void start_process(void* file_name_) {
-  char* file_name = (char*)file_name_;
+//INCREMENT REFCOUNT IF SUCCESSFUL
+static void start_process(void* args) {
+  struct startprocess_data* arguments = (startprocess_data*) args;
+  struct connection* parent_connection = arguments->parent_connection;
+  char* file_name = arguments->filename;
   struct thread* t = thread_current();
   struct intr_frame if_;
   bool success, pcb_success;
@@ -110,6 +139,7 @@ static void start_process(void* file_name_) {
     struct process* pcb_to_free = t->pcb;
     t->pcb = NULL;
     free(pcb_to_free);
+
   }
 
   /* Clean up. Exit on failure or jump to userspace */
@@ -118,6 +148,15 @@ static void start_process(void* file_name_) {
     sema_up(&temporary);
     thread_exit();
   }
+
+  //NEWCODE START
+  parent_connection->child_process = t->pcb;
+  parent_connection->child_pid = get_pid(t->pcb);
+  t->pcb->parent_connection = parent_connection->parent_process;
+  
+  lock_acquire(&parent_connection->connection_lock);
+  parent_connection->refcount += 1;
+  lock_release(&parent_connection->connection_lock);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -144,7 +183,8 @@ int process_wait(pid_t child_pid UNUSED) {
 }
 
 /* Free the current process's resources. */
-void process_exit(void) {
+//return exit code for wait?
+void process_exit(int status) {
   struct thread* cur = thread_current();
   uint32_t* pd;
 
@@ -153,6 +193,50 @@ void process_exit(void) {
     thread_exit();
     NOT_REACHED();
   }
+
+  
+  lock_acquire(&parent_connection->connection_lock);
+  parent_connection->refcount -= 1;
+  lock_release(&parent_connection->connection_lock);
+
+  if (parent_connection->refcount == 0) {
+    //free(&parent_connection->connection_lock);
+    //free(&parent_connection->connection_semaphore);
+    free(&parent_connection->elem);
+    free(&parent_connection);
+  } else {
+    parent_connection->exit_code = status;
+  }
+
+  //NEW CODE START
+  //go through list of children and update each child's parent to be NULL
+  //free child connection if refcount == 0
+  struct list_elem e = list_begin(curr->pcb->&child_connections);
+  while (e != list_end(curr->pcb->&child_connections)) {
+    struct connection *child_connection = list_entry(e, struct connection, elem);
+    struct process *child = child_connection->child_process;
+
+    lock_acquire(&child_connection->connection_lock);
+    child_connection->refcount -= 1;
+    lock_release(&child_connection->connection_lock);
+
+    if (child_connection->refcount == 0) {
+      child->parent_connection = NULL;
+      //free(&child_connection->connection_lock);
+      //free(&child_connection->connection_semaphore);
+      e = list_next(e);
+      //CALL LIST REMOVE INSTEAD OF FREE ELEM
+      free(&child_connection->elem);
+      free(&child_connection);
+    } else {
+      e = list_next(e);
+    }
+  }
+  //*******************dont need to malloc each individual struct within struct, if you malloc the outer struct then the inner structs will be within that memory on the heap
+  free(curr->pcb->child_connections);
+  sema_up(&parent_connection->connection_semaphore);
+
+  printf("%s: exit %i", curr->pcb->process_name, status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -177,6 +261,7 @@ void process_exit(void) {
   struct process* pcb_to_free = cur->pcb;
   cur->pcb = NULL;
   free(pcb_to_free);
+
 
   sema_up(&temporary);
   thread_exit();
