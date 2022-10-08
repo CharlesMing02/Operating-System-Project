@@ -46,7 +46,7 @@ struct connection {
 struct startprocess_data {
   char* filename;
   struct connection* parent_connection;
-}
+};
 
 void userprog_init(void);
 
