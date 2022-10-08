@@ -323,7 +323,7 @@ void process_exit(int status) {
   free(curr->pcb->child_connections);
   sema_up(&parent_connection->connection_semaphore);
 
-  printf("%s: exit %i", curr->pcb->process_name, status);
+  //printf("%s: exit %i", curr->pcb->process_name, status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
