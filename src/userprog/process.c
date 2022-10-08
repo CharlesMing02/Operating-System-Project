@@ -143,42 +143,44 @@ static void start_process(void* args) {
     success = load(file_name, &if_.eip, &if_.esp);
   }
 
-  /* Push arguments onto stack before program begins */
-  char* esp = (char*) if_.esp;
-  char* argv[argc + 1];
-  argv[argc] = NULL;
-  strlcpy(string, file_name_, strlen(file_name_) + 1);
-  word = strtok_r(string, " ", &saveptr);
-  int i = 0;
-  while (word != NULL) {
-    esp -= sizeof(word);
-    *esp = word;
-    argv[i] = esp;
-    word = strtok_r(NULL, " ", &saveptr);
-  }
-  // add empty space for 16 byte alignment
-  int argsize = sizeof(char*) * (argc + 1) + sizeof(char**) + sizeof(int);
-  uint32_t alignment = (esp - argsize) % 16;
-  if (alignment != 0) {
-    for (i = 0; i < alignment; i++) {
-      esp -= 1;
-      *esp = 0;
+  if (success) {
+    /* Push arguments onto stack before program begins */
+    char* esp = (char*) if_.esp;
+    char* argv[argc + 1];
+    argv[argc] = NULL;
+    strlcpy(string, file_name_, strlen(file_name_) + 1);
+    word = strtok_r(string, " ", &saveptr);
+    int i = 0;
+    while (word != NULL) {
+      esp -= sizeof(word);
+      *esp = word;
+      argv[i] = esp;
+      word = strtok_r(NULL, " ", &saveptr);
     }
-  }
+    // add empty space for 16 byte alignment
+    int argsize = sizeof(char*) * (argc + 1) + sizeof(char**) + sizeof(int);
+    uint32_t alignment = (esp - argsize) % 16;
+    if (alignment != 0) {
+      for (i = 0; i < alignment; i++) {
+        esp -= 1;
+        *esp = 0;
+      }
+    }
 
-  for (i = argc; i >= 0; i--) {
-    esp -= sizeof(char*);
-    *esp = argv[i];
+    for (i = argc; i >= 0; i--) {
+      esp -= sizeof(char*);
+      *esp = argv[i];
+    }
+    // push argv
+    esp -= sizeof(char**);
+    *esp = esp + sizeof(char**);
+    // push argc 
+    esp -= sizeof(int);
+    *esp = argc;
+    // push fake return address
+    esp -= sizeof(void*);
+    *esp = NULL;
   }
-  // push argv
-  esp -= sizeof(char**);
-  *esp = esp + sizeof(char**);
-  // push argc 
-  esp -= sizeof(int);
-  *esp = argc;
-  // push fake return address
-  esp -= sizeof(void*);
-  *esp = NULL;
 
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
