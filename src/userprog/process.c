@@ -46,6 +46,14 @@ void userprog_init(void) {
   ASSERT(success);
 }
 
+int practice(int i) {
+  return i+1;
+}
+
+void halt(void) {
+  shutdown_power_off();
+}
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -89,6 +97,7 @@ pid_t process_execute(const char* file_name) {
   sema_down(&newconnection->connection_semaphore);
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
+    return -1;
   return tid;
 }
 
@@ -195,19 +204,27 @@ static void start_process(void* args) {
 
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);
+
+  //if unsuccessful, sema_up, then destroy parent_connection
   if (!success) {
     //sema_up(&temporary);
+    sema_up(&parent_connection->connection_semaphore);
+    free(&parent_connection);
     thread_exit();
   }
-
-  //NEWCODE START
-  parent_connection->child_process = t->pcb;
-  parent_connection->child_pid = get_pid(t->pcb);
-  t->pcb->parent_connection = parent_connection->parent_process;
   
-  lock_acquire(&parent_connection->connection_lock);
-  parent_connection->refcount += 1;
-  lock_release(&parent_connection->connection_lock);
+  //if successful pcb alloc and load, set remaining parent_connection attributes, child's parent_connection, then up sema
+  if (success) {
+    parent_connection->child_process = t->pcb;
+    parent_connection->child_pid = get_pid(t->pcb);
+    t->pcb->parent_connection = parent_connection;
+    list_push_back(&parent_connection->parent_process->child_connections, &parent_connection->elem);
+  
+    lock_acquire(&parent_connection->connection_lock);
+    parent_connection->refcount += 1;
+    lock_release(&parent_connection->connection_lock);
+    sema_up(&parent_connection->connection_semaphore);
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -230,7 +247,28 @@ static void start_process(void* args) {
    does nothing. */
 int process_wait(pid_t child_pid UNUSED) {
   //sema_down(&temporary);
-  return 0;
+  
+  bool ischild = false;
+  struct connection* child_connection;
+  struct thread* t = thread_current();
+  for (e = list_begin(&t->pcb->child_connections); e != list_end(&t->pcb->child_connections; e = list_next(e))) {
+    struct connection* c = list_entry(e, struct connection, elem);
+    if (child_pid == c->child_pid) {
+      child_connection = c;
+      ischild = true;
+      break;
+    }
+  }
+  if (!ischild) {
+    return -1;
+  }
+  if (child_connection->exit_code != NULL) {
+    return child_connection->exit_code;
+  }
+
+  sema_down(&child_connection->connection_semaphore);
+  return child_connection->exit_code;
+  
 }
 
 /* Free the current process's resources. */
