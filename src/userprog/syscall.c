@@ -37,6 +37,13 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       putbuf(args[2], args[3]);
       return args[3];
     }
-    return 
+  } else if (args[0] == SYS_PRACTICE) {
+    f->eax = args[1]+1;
+  } else if (args[0] == SYS_HALT) {
+    halt();
+  } else if (args[0] == SYS_EXEC) {
+    f->eax = process_execute(args[1]);
+  } else if (args[0] == SYS_WAIT) {
+    f->eax = process_wait(args[1]);   
   }
 }
