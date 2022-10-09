@@ -64,10 +64,10 @@ pid_t process_execute(const char* file_name) {
 
   //if current process has no children, initialize its list
   struct thread* curthread = thread_current();
-  if (curthread->pcb->child_connections = NULL) {
+  /*if (curthread->pcb->child_connections == NULL) {
     curthread->pcb->child_connections = malloc(sizeof(struct list));
     list_init(curthread->pcb->child_connections);
-  }  
+  } */ 
 
   //initialize new connection between this process and its child
   struct connection* newconnection = malloc(sizeof(struct connection));
@@ -75,7 +75,7 @@ pid_t process_execute(const char* file_name) {
   sema_init(&newconnection->connection_semaphore, 0);
   newconnection->parent_process = curthread->pcb;
   newconnection->parent_pid = get_pid(curthread->pcb);
-  newconnection->exit_code = NULL;
+  newconnection->exited = false;
   newconnection->refcount = 1;
 
   struct startprocess_data* args = malloc(sizeof(struct startprocess_data));
@@ -95,9 +95,10 @@ pid_t process_execute(const char* file_name) {
   
   //wait for load to resolve before continuing
   sema_down(&newconnection->connection_semaphore);
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
     return -1;
+  }
   return tid;
 }
 
@@ -107,7 +108,7 @@ pid_t process_execute(const char* file_name) {
 static void start_process(void* args) {
 
   //unpack args struct
-  struct startprocess_data* arguments = (startprocess_data*) args;
+  struct startprocess_data* arguments = (struct startprocess_data*) args;
   struct connection* parent_connection = arguments->parent_connection;
   char* file_name = arguments->filename;
   struct thread* t = thread_current();
@@ -140,6 +141,9 @@ static void start_process(void* args) {
     // Continue initializing the PCB as normal
     t->pcb->main_thread = t;
     strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+
+    //initialize children list
+    list_init(t->pcb->child_connections);
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -264,7 +268,7 @@ int process_wait(pid_t child_pid UNUSED) {
   if (!ischild) {
     return -1;
   }
-  if (child_connection->exit_code != NULL) {
+  if (child_connection->exited == true) {
     return child_connection->exit_code;
   }
 

@@ -39,6 +39,7 @@ struct connection {
   struct semaphore connection_semaphore;
   struct lock connection_lock;
   int refcount;
+  bool exited;
   int exit_code;
   struct list_elem elem;
 };
@@ -49,6 +50,10 @@ struct startprocess_data {
 };
 
 void userprog_init(void);
+
+int practice(int i);
+
+void halt(void);
 
 pid_t process_execute(const char* file_name);
 int process_wait(pid_t);
