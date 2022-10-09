@@ -62,12 +62,19 @@ pid_t process_execute(const char* file_name) {
   char* fn_copy;
   tid_t tid;
 
+  /* Make a copy of FILE_NAME.
+     Otherwise there's a race between the caller and load(). */
+  fn_copy = palloc_get_page(0);
+  if (fn_copy == NULL)
+    return TID_ERROR;
+  strlcpy(fn_copy, file_name, PGSIZE);
+
   //if current process has no children, initialize its list
   struct thread* curthread = thread_current();
   /*if (curthread->pcb->child_connections == NULL) {
     curthread->pcb->child_connections = malloc(sizeof(struct list));
     list_init(curthread->pcb->child_connections);
-  } */ 
+  } */
 
   //initialize new connection between this process and its child
   struct connection* newconnection = malloc(sizeof(struct connection));
@@ -79,16 +86,8 @@ pid_t process_execute(const char* file_name) {
   newconnection->refcount = 1;
 
   struct startprocess_data* args = malloc(sizeof(struct startprocess_data));
-  args->filename = file_name;
+  args->filename = fn_copy;
   args->parent_connection = newconnection;
-
-  //sema_init(&temporary, 0);
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page(0);
-  if (fn_copy == NULL)
-    return TID_ERROR;
-  strlcpy(fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(file_name, PRI_DEFAULT, start_process, (void*) args);
@@ -97,7 +96,7 @@ pid_t process_execute(const char* file_name) {
   sema_down(&newconnection->connection_semaphore);
   if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
-    return -1;
+    //return -1;
   }
   return tid;
 }
