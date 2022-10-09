@@ -143,7 +143,7 @@ static void start_process(void* args) {
     strlcpy(t->pcb->process_name, t->name, sizeof t->name);
 
     //initialize children list
-    list_init(t->pcb->child_connections);
+    list_init(&(t->pcb->child_connections));
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -215,7 +215,7 @@ static void start_process(void* args) {
   if (!success) {
     //sema_up(&temporary);
     sema_up(&parent_connection->connection_semaphore);
-    free(&parent_connection);
+    free(parent_connection);
     thread_exit();
   }
   
@@ -257,7 +257,8 @@ int process_wait(pid_t child_pid UNUSED) {
   bool ischild = false;
   struct connection* child_connection;
   struct thread* t = thread_current();
-  for (e = list_begin(&t->pcb->child_connections); e != list_end(&t->pcb->child_connections; e = list_next(e))) {
+  struct list_elem* e;
+  for (e = list_begin(&t->pcb->child_connections); e != list_end(&t->pcb->child_connections); e = list_next(e)) {
     struct connection* c = list_entry(e, struct connection, elem);
     if (child_pid == c->child_pid) {
       child_connection = c;
@@ -290,21 +291,21 @@ void process_exit(int status) {
   }
 
   //decrement refcount
-  lock_acquire(&parent_connection->connection_lock);
-  parent_connection->refcount -= 1;
-  lock_release(&parent_connection->connection_lock);
+  lock_acquire(&(cur->pcb->parent_connection->connection_lock));
+  cur->pcb->parent_connection->refcount -= 1;
+  lock_release(&(cur->pcb->parent_connection->connection_lock));
 
   //if parent connection refcount == 0, free it, else update its exit code because its child is exiting now
-  if (parent_connection->refcount == 0) {
-    list_remove(&parent_connection->elem);
-    free(&parent_connection);
+  if (cur->pcb->parent_connection->refcount == 0) {
+    list_remove(&(cur->pcb->parent_connection->elem));
+    free(cur->pcb->parent_connection);
   } else {
-    parent_connection->exit_code = status;
+    cur->pcb->parent_connection->exit_code = status;
   }
 
   //go through list of children and update each child's parent to be NULL
-  struct list_elem e = list_begin(curr->pcb->&child_connections);
-  while (e != list_end(curr->pcb->&child_connections)) {
+  struct list_elem* e = list_begin(&cur->pcb->child_connections);
+  while (e != list_end(&cur->pcb->child_connections)) {
     struct connection *child_connection = list_entry(e, struct connection, elem);
     struct process *child = child_connection->child_process;
 
@@ -324,8 +325,8 @@ void process_exit(int status) {
     }
   }
   //*******************dont need to malloc each individual struct within struct, if you malloc the outer struct then the inner structs will be within that memory on the heap
-  free(curr->pcb->child_connections);
-  sema_up(&parent_connection->connection_semaphore);
+  free(&cur->pcb->child_connections);
+  sema_up(&cur->pcb->parent_connection->connection_semaphore);
 
   //printf("%s: exit %i", curr->pcb->process_name, status);
 
