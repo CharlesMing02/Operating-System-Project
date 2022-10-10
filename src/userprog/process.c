@@ -147,7 +147,7 @@ static void start_process(void* file_name_) {
     // push argv
     esp -= sizeof(char**);
     char* argv_address = esp + sizeof(char**);
-    *esp = argv_address;
+    memcpy(esp, &argv_address, sizeof(char**));
     // push argc 
     esp -= sizeof(int);
     *esp = argc;
@@ -199,7 +199,7 @@ int process_wait(pid_t child_pid UNUSED) {
 }
 
 /* Free the current process's resources. */
-void process_exit(void) {
+void process_exit(int code) {
   struct thread* cur = thread_current();
   uint32_t* pd;
 
@@ -209,6 +209,7 @@ void process_exit(void) {
     NOT_REACHED();
   }
 
+  printf("%s: exit(%d)\n", thread_current()->pcb->process_name, code);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pcb->pagedir;

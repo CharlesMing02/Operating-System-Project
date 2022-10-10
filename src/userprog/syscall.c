@@ -28,8 +28,8 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   if (args[0] == SYS_EXIT) {
     f->eax = args[1];
-    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
-    process_exit();
+    //printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
+    process_exit((int) args[1]);
   } else if (args[0] == SYS_WRITE) {
     lock_acquire(&global_filesys_lock);
     if (args[1] == 1) {
@@ -37,5 +37,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       f->eax = args[3];
     }
     lock_release(&global_filesys_lock);
-  } 
+  } else if (args[0] == SYS_PRACTICE) {
+    f->eax = args[1]+1;
+  }
 }
