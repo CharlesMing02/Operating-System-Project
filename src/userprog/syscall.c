@@ -22,12 +22,11 @@ void validate(uint32_t* address) {
   for (int i = 0; i < 4; i++) {
     valid = is_user_vaddr(address+i);
     if (!valid) {
- 
       process_exit(-1);
     }
-  }
-  if (pagedir_get_page(active_pd(), address) == NULL) {
-    process_exit(-1);
+    if (pagedir_get_page(active_pd(), address+i) == NULL) {
+      process_exit(-1);
+    }
   }
 }
 
