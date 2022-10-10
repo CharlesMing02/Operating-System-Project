@@ -15,7 +15,6 @@ void syscall_init(void) {
   lock_init(&global_filesys_lock); 
 }
 
-
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
   /*
@@ -29,7 +28,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   if (args[0] == SYS_EXIT) {
     f->eax = args[1];
-    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
+    //printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
     process_exit((int) args[1]);
   } else if (args[0] == SYS_WRITE) {
     lock_acquire(&global_filesys_lock);
