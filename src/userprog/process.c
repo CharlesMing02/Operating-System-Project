@@ -170,7 +170,7 @@ static void start_process(void* args) {
     }
     // add empty space for 16 byte alignment
     int argsize = sizeof(char*) * (argc + 1) + sizeof(char**) + sizeof(int);
-    int alignment = ((int) esp - argsize) % 16;
+    int alignment = ((unsigned int) esp - argsize) % 16;
     int zero = 0;
     if (alignment != 0) {
       for (i = 0; i < alignment; i++) {
@@ -208,7 +208,7 @@ static void start_process(void* args) {
   }
 
   /* Clean up. Exit on failure or jump to userspace */
-  palloc_free_page(file_name);
+  palloc_free_page(arguments->filename);
 
   //if unsuccessful, sema_up, then destroy parent_connection
   if (!success) {
