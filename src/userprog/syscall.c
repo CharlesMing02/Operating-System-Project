@@ -6,6 +6,7 @@
 #include "userprog/process.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -21,9 +22,12 @@ void validate(uint32_t* address) {
   for (int i = 0; i < 4; i++) {
     valid = is_user_vaddr(address+i);
     if (!valid) {
-      //NOTE: did not set f->eax = -1
+ 
       process_exit(-1);
     }
+  }
+  if (pagedir_get_page(active_pd(), address) == NULL) {
+    process_exit(-1);
   }
 }
 
