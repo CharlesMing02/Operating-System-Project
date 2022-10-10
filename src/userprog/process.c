@@ -84,6 +84,7 @@ pid_t process_execute(const char* file_name) {
   //newconnection->parent_pid = get_pid(curthread->pcb);
   newconnection->exited = false;
   newconnection->refcount = 1;
+  newconnection->failed = false;
   list_init(&curthread->pcb->child_connections);
 
   struct startprocess_data* args = malloc(sizeof(struct startprocess_data));
@@ -99,8 +100,8 @@ pid_t process_execute(const char* file_name) {
     palloc_free_page(fn_copy);
     return -1;
   }
-  if (newconnection->exited) {
-    return newconnection->exit_code;
+  if (newconnection->failed) {
+    return -1;
   }
   return tid;
 }
@@ -222,8 +223,7 @@ static void start_process(void* args) {
 
   if (!success) {
     //sema_up(&temporary);
-    parent_connection->exited = true;
-    parent_connection->exit_code = -1;
+    parent_connection->failed = true;
     sema_up(&parent_connection->connection_semaphore);
     //free(parent_connection);
     thread_exit();
