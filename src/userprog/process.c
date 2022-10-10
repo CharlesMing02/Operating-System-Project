@@ -157,6 +157,7 @@ static void start_process(void* file_name_) {
     // push fake return address
     esp -= sizeof(void*);
     memcpy(esp, &zero, sizeof(void*));
+    if_.esp = esp;
   }
 
 
