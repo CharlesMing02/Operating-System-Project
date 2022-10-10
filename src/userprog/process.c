@@ -109,10 +109,11 @@ static void start_process(void* args) {
   //unpack args struct
   struct startprocess_data* arguments = (struct startprocess_data*) args;
   struct connection* parent_connection = arguments->parent_connection;
-  char* file_name = arguments->filename;
+  char* file_name_ = arguments->filename;
   struct thread* t = thread_current();
   struct intr_frame if_;
   bool success, pcb_success;
+  char* file_name;
 
   /* Get file name, count number of arguments */
   char string[strlen(file_name_) + 1];
