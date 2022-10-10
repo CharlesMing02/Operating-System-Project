@@ -97,7 +97,10 @@ pid_t process_execute(const char* file_name) {
   sema_down(&newconnection->connection_semaphore);
   if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
-    //return -1;
+    return -1;
+  }
+  if (newconnection->exited) {
+    return newconnection->exit_code;
   }
   return tid;
 }
@@ -156,6 +159,7 @@ static void start_process(void* args) {
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
   }
+  //sema_up(&parent_connection->connection_semaphore);
 
   if (success) {
     /* Push arguments onto stack before program begins */
@@ -218,8 +222,10 @@ static void start_process(void* args) {
 
   if (!success) {
     //sema_up(&temporary);
+    parent_connection->exited = true;
+    parent_connection->exit_code = -1;
     sema_up(&parent_connection->connection_semaphore);
-    free(parent_connection);
+    //free(parent_connection);
     thread_exit();
   }
   
@@ -326,6 +332,7 @@ void process_exit(int status) {
       e = list_next(e);
       //CALL LIST REMOVE INSTEAD OF FREE ELEM
       list_remove(&child_connection->elem);
+      free(&child_connection);
     } else {
       e = list_next(e);
     }
