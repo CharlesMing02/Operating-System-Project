@@ -274,7 +274,9 @@ int process_wait(pid_t child_pid UNUSED) {
     return -1;
   }
   if (child_connection->exited == true) {
-    return child_connection->exit_code;
+    int ret = child_connection->exit_code;
+    child_connection->exit_code = -1;
+    return ret;
   }
 
   sema_down(&child_connection->connection_semaphore);
@@ -304,6 +306,7 @@ void process_exit(int status) {
     list_remove(&(cur->pcb->parent_connection->elem));
     free(cur->pcb->parent_connection);
   } else {
+    cur->pcb->parent_connection->exited = true;
     cur->pcb->parent_connection->exit_code = status;
   }
 
@@ -323,7 +326,6 @@ void process_exit(int status) {
       e = list_next(e);
       //CALL LIST REMOVE INSTEAD OF FREE ELEM
       list_remove(&child_connection->elem);
-      free(&child_connection);
     } else {
       e = list_next(e);
     }
