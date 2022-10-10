@@ -81,9 +81,10 @@ pid_t process_execute(const char* file_name) {
   lock_init(&newconnection->connection_lock);
   sema_init(&newconnection->connection_semaphore, 0);
   newconnection->parent_process = curthread->pcb;
-  newconnection->parent_pid = get_pid(curthread->pcb);
+  //newconnection->parent_pid = get_pid(curthread->pcb);
   newconnection->exited = false;
   newconnection->refcount = 1;
+  list_init(&curthread->pcb->child_connections);
 
   struct startprocess_data* args = malloc(sizeof(struct startprocess_data));
   args->filename = fn_copy;
@@ -328,11 +329,11 @@ void process_exit(int status) {
     }
   }
   //*******************dont need to malloc each individual struct within struct, if you malloc the outer struct then the inner structs will be within that memory on the heap
-  free(&cur->pcb->child_connections);
+  //free(&cur->pcb->child_connections);
   sema_up(&cur->pcb->parent_connection->connection_semaphore);
 
   //printf("%s: exit %i", curr->pcb->process_name, status);
-
+  printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
