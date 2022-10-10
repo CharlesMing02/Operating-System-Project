@@ -83,6 +83,7 @@ static void start_process(void* file_name_) {
   char* saveptr;
   char* word = strtok_r(string, " ", &saveptr);
   file_name = word;
+  strlcpy(t->name, file_name, strlen(file_name) + 1);
   int argc = 0;
   while (word != NULL) {
     argc++;
@@ -139,18 +140,20 @@ static void start_process(void* file_name_) {
         memcpy(esp, &zero, 1);
       }
     }
-
+    // push pointers to args
     for (i = argc; i >= 0; i--) {
       esp -= sizeof(char*);
       memcpy(esp, &argv[i], sizeof(char*));
     }
     // push argv
+    //*(esp - sizeof(char**)) = esp;
     esp -= sizeof(char**);
     char* argv_address = esp + sizeof(char**);
     memcpy(esp, &argv_address, sizeof(char**));
     // push argc 
     esp -= sizeof(int);
-    *esp = argc;
+    //*esp = argc;
+    memcpy(esp, &argc, sizeof(int));
     // push fake return address
     esp -= sizeof(void*);
     memcpy(esp, &zero, sizeof(void*));
