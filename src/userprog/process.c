@@ -332,7 +332,7 @@ void process_exit(int status) {
       e = list_next(e);
       //CALL LIST REMOVE INSTEAD OF FREE ELEM
       list_remove(&child_connection->elem);
-      free(&child_connection);
+      free(child_connection);
     } else {
       e = list_next(e);
     }
