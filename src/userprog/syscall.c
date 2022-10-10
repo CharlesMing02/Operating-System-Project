@@ -4,6 +4,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "userprog/process.h"
+#include "threads/synch.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -16,7 +17,6 @@ void syscall_init(void) {
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
-
   /*
    * The following print statement, if uncommented, will print out the syscall
    * number whenever a process enters a system call. You might find it useful
@@ -39,5 +39,11 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     lock_release(&global_filesys_lock);
   } else if (args[0] == SYS_PRACTICE) {
     f->eax = args[1]+1;
+  } else if (args[0] == SYS_HALT) {
+    halt();
+  } else if (args[0] == SYS_EXEC) {
+    f->eax = process_execute((char*) args[1]);
+  } else if (args[0] == SYS_WAIT) {
+    f->eax = process_wait((pid_t) args[1]);   
   }
 }

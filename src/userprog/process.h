@@ -27,13 +27,37 @@ struct process {
   uint32_t* pagedir;          /* Page directory. */
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
+  struct list child_connections;
+  struct connection* parent_connection;
+};
+
+struct connection {
+  struct process* child_process;
+  pid_t child_pid;
+  struct process* parent_process;
+  pid_t parent_pid;
+  struct semaphore connection_semaphore;
+  struct lock connection_lock;
+  int refcount;
+  bool exited;
+  int exit_code;
+  struct list_elem elem;
+};
+
+struct startprocess_data {
+  char* filename;
+  struct connection* parent_connection;
 };
 
 void userprog_init(void);
 
+int practice(int i);
+
+void halt(void);
+
 pid_t process_execute(const char* file_name);
 int process_wait(pid_t);
-void process_exit(int code);
+void process_exit(int status);
 void process_activate(void);
 
 bool is_main_thread(struct thread*, struct process*);
