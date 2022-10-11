@@ -441,7 +441,8 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   #ifdef USERPROG
     t->current_file = NULL;
     t->count_open_files = 2;    /* Initialize as 2 including STDOUT and STDIN */
-    t->all_open_files[MAX_POSSIBLE_OPENED] = {NULL};
+    struct file* all_open_files[MAX_POSSIBLE_OPENED] = {NULL};
+    t->all_open_files = all_open_files;
   #endif
 }
 

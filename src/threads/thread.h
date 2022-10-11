@@ -101,7 +101,7 @@ struct thread {
 
   int count_open_files; /* Count for currently opened files. */
 
-  struct file* all_open_files; /* Array to keep track of open files and their file descriptors. */
+  struct file** all_open_files; /* Array to keep track of open files and their file descriptors. */
 #endif
 
   /* Owned by thread.c. */
