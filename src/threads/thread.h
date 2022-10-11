@@ -25,8 +25,6 @@ typedef int tid_t;
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63     /* Highest priority. */
 
-#define MAX_POSSIBLE_OPENED 128     /* Maximum number of files that can remain opened. */
-
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -103,7 +101,7 @@ struct thread {
 
   int count_open_files; /* Count for currently opened files. */
 
-  struct file* all_open_files[MAX_POSSIBLE_OPENED]; /* Array to keep track of open files and their file descriptors. */
+  struct file* all_open_files; /* Array to keep track of open files and their file descriptors. */
 #endif
 
   /* Owned by thread.c. */
