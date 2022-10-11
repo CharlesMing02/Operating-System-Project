@@ -124,7 +124,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_CLOSE:
       validate((uint32_t*) &args[1]);
-      f->eax = close((int) args[1]);
+      close((int) args[1]);
       break;
   }
 } 
@@ -149,7 +149,7 @@ bool remove (const char *file) {
 int open (const char *file) {
   lock_acquire(&global_filesys_lock);
 
-  if (thread_current()->count_open_files > thread_current()->MAX_POSSIBLE_OPENED) {
+  if (thread_current()->count_open_files > MAX_POSSIBLE_OPENED) {
     lock_release(&global_filesys_lock);
     return -1;
   }
@@ -171,7 +171,7 @@ int open (const char *file) {
 int filesize (int fd) {
   lock_acquire(&global_filesys_lock);
 
-  if (fd >= thread_current()->MAX_POSSIBLE_OPENED || fd == 0 || fd == 1 || thread_current()->all_open_files[fd] == NULL) {
+  if (fd >= MAX_POSSIBLE_OPENED || fd == 0 || fd == 1 || thread_current()->all_open_files[fd] == NULL) {
     lock_release(&global_filesys_lock);
     return -1;
   }
@@ -186,7 +186,7 @@ int filesize (int fd) {
 int read (int fd, void *buffer, unsigned size) {
   lock_acquire(&global_filesys_lock);
 
-  if (fd >= thread_current()->MAX_POSSIBLE_OPENED || fd == 1 || thread_current()->all_open_files[fd] == NULL) {
+  if (fd >= MAX_POSSIBLE_OPENED || fd == 1 || thread_current()->all_open_files[fd] == NULL) {
     lock_release(&global_filesys_lock);
     return -1;
   }
@@ -194,13 +194,13 @@ int read (int fd, void *buffer, unsigned size) {
   /* Reading from the keyboard when fd refers to the STDIN. */
   if (fd == 0) {
     for (unsigned s = 0; s < size; ++s) {
-      buffer[s] = input_getc();
+      (uint8_t *) buffer[s] = input_getc();
     }
     lock_release(&global_filesys_lock);
     return size;
   }
 
-  int read_file = (int) file_read(all_open_files[fd]);
+  int read_file = (int) file_read(thread_current()->all_open_files[fd]);
 
   lock_release(&global_filesys_lock);
   return read_file;
@@ -209,7 +209,7 @@ int read (int fd, void *buffer, unsigned size) {
 int write (int fd, const void *buffer, unsigned size) {
   lock_acquire(&global_filesys_lock);
 
-  if (fd >= thread_current()->MAX_POSSIBLE_OPENED || fd == 0 || thread_current()->all_open_files[fd] == NULL) {
+  if (fd >= MAX_POSSIBLE_OPENED || fd == 0 || thread_current()->all_open_files[fd] == NULL) {
     lock_release(&global_filesys_lock);
     return -1;
   }
@@ -221,7 +221,7 @@ int write (int fd, const void *buffer, unsigned size) {
     return size;
   }
 
-  int write_file = (int) file_write(all_open_files[fd], buffer, size);
+  int write_file = (int) file_write(thread_current()->all_open_files[fd], buffer, size);
   lock_release(&global_filesys_lock);
   return write_file;
 }
@@ -229,7 +229,7 @@ int write (int fd, const void *buffer, unsigned size) {
 void seek (int fd, unsigned position) {
   lock_acquire(&global_filesys_lock);
 
-  if (fd >= thread_current()->MAX_POSSIBLE_OPENED || fd == 0 || fd == 1 || thread_current()->all_open_files[fd] == NULL) {
+  if (fd >= MAX_POSSIBLE_OPENED || fd == 0 || fd == 1 || thread_current()->all_open_files[fd] == NULL) {
     lock_release(&global_filesys_lock);
     return;
   }
@@ -241,7 +241,7 @@ void seek (int fd, unsigned position) {
 unsigned tell(int fd) {
   lock_acquire(&global_filesys_lock);
 
-  if (fd >= thread_current()->MAX_POSSIBLE_OPENED || fd == 0 || fd == 1 || thread_current()->all_open_files[fd] == NULL) {
+  if (fd >= MAX_POSSIBLE_OPENED || fd == 0 || fd == 1 || thread_current()->all_open_files[fd] == NULL) {
     lock_release(&global_filesys_lock);
     return -1;
   }
@@ -254,7 +254,7 @@ unsigned tell(int fd) {
 void close (int fd) {
   lock_acquire(&global_filesys_lock);
 
-  if (fd >= thread_current()->MAX_POSSIBLE_OPENED || fd == 0 || fd == 1 || thread_current()->all_open_files[fd] == NULL) {
+  if (fd >= MAX_POSSIBLE_OPENED || fd == 0 || fd == 1 || thread_current()->all_open_files[fd] == NULL) {
     lock_release(&global_filesys_lock);
     return;
   }

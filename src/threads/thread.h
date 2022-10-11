@@ -25,6 +25,8 @@ typedef int tid_t;
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63     /* Highest priority. */
 
+#define MAX_POSSIBLE_OPENED 128     /* Maximum number of files that can remain opened. */
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
