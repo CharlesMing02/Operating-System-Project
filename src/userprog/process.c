@@ -158,6 +158,7 @@ static void start_process(void* args) {
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
+    asm("fsave (%0)" : : "g"(&if_.fpu_state));
     success = load(file_name, &if_.eip, &if_.esp);
   }
   //sema_up(&parent_connection->connection_semaphore);
@@ -344,6 +345,7 @@ void process_exit(int status) {
   //printf("%s: exit %i", curr->pcb->process_name, status);
   printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
 
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pcb->pagedir;
@@ -359,6 +361,8 @@ void process_exit(int status) {
     pagedir_activate(NULL);
     pagedir_destroy(pd);
   }
+
+  file_close(cur->current_file);
 
   /* Free the PCB of this process and kill this thread
      Avoid race where PCB is freed before t->pcb is set to NULL
@@ -479,6 +483,10 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
+
+  /* Initiate for filesys */
+  file_deny_write(file);
+  t->current_file = file;
 
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
