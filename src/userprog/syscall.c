@@ -77,5 +77,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       validate((uint32_t*) &args[1]);
       f->eax = process_wait((pid_t) args[1]);   
       break;
+    case SYS_COMPUTE_E:
+      validate((uint32_t*) &args[1]);
+      f->eax = sys_sum_to_e(args[1]);
+      break;
   }
 }
