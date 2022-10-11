@@ -7,6 +7,8 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -203,7 +205,7 @@ int read (int fd, void *buffer, unsigned size) {
     return size;
   }
 
-  int read_file = (int) file_read(thread_current()->all_open_files[fd]);
+  int read_file = (int) file_read(thread_current()->all_open_files[fd], buffer, size); //WHAT SHOULD THE OTHER ARGS BE?
 
   lock_release(&global_filesys_lock);
   return read_file;
