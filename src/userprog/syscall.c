@@ -166,11 +166,16 @@ int open (const char *file) {
   }
 
   thread_current()->all_open_files[new_fd] = filesys_open(file);
+  if (thread_current()->all_open_files[new_fd] == NULL) {
+    lock_release(&global_filesys_lock);
+    return -1;
+  }
 
   /* Increment number of open files if successful. */
   thread_current()->count_open_files++;
 
   lock_release(&global_filesys_lock);
+  return new_fd;
 }
 
 int filesize (int fd) {
@@ -193,7 +198,8 @@ int read (int fd, void *buffer, unsigned size) {
 
   if (fd >= MAX_POSSIBLE_OPENED || fd == 1 || thread_current()->all_open_files[fd] == NULL) {
     lock_release(&global_filesys_lock);
-    return -1;
+    process_exit(-1);
+    //return -1;
   }
 
   /* Reading from the keyboard when fd refers to the STDIN. */
@@ -205,6 +211,9 @@ int read (int fd, void *buffer, unsigned size) {
     return size;
   }
 
+  /*if (thread_current()->all_open_files[fd] == NULL) {
+    return -1;
+  }*/
   int read_file = (int) file_read(thread_current()->all_open_files[fd], buffer, size); //WHAT SHOULD THE OTHER ARGS BE?
 
   lock_release(&global_filesys_lock);
@@ -223,7 +232,8 @@ int write (int fd, const void *buffer, unsigned size) {
 
   if (fd >= MAX_POSSIBLE_OPENED || fd == 0 || thread_current()->all_open_files[fd] == NULL) {
     lock_release(&global_filesys_lock);
-    return -1;
+    process_exit(-1);
+    //return -1;
   }
 
   int write_file = (int) file_write(thread_current()->all_open_files[fd], buffer, size);
@@ -268,4 +278,6 @@ void close (int fd) {
   /* Decrement number of open files. */
   thread_current()->count_open_files--;
   thread_current()->all_open_files[fd] = NULL;
+  lock_release(&global_filesys_lock);
+
 }
