@@ -345,6 +345,7 @@ void process_exit(int status) {
   //printf("%s: exit %i", curr->pcb->process_name, status);
   printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
 
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pcb->pagedir;
