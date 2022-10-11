@@ -79,52 +79,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       validate((uint32_t*) &args[1]);
       f->eax = sys_sum_to_e(args[1]);
       break;
-    case SYS_CREATE:
-      validate((uint32_t*) &args[1]);
-      //validate((uint32_t*) args[1]);
-      validate((uint32_t) &args[2]);
-      f->eax = create((const char*) args[1], (unsigned) args[2]);
-      break;
-    case SYS_REMOVE:
-      validate((uint32_t*) &args[1]);
-      validate((uint32_t*) args[1]);
-      f->eax = remove((const char*) args[1]);
-      break;
-    case SYS_OPEN:
-      validate((uint32_t*) &args[1]);
-      validate((uint32_t*) args[1]);
-      f->eax = open((const char*) args[1]);
-      break;
-    case SYS_FILESIZE:
-      validate((uint32_t*) &args[1]);
-      f->eax = filesize((int) args[1]);
-      break;
-    case SYS_READ:
-      validate((uint32_t*) &args[1]);
-      validate((uint32_t*) &args[2]);
-      validate((uint32_t*) args[2]);
-      validate((uint32_t*) &args[3]);
-      f->eax = read((int) args[1], (void *) args[2], (unsigned) args[3]);
-      break;
     case SYS_WRITE:
       validate((uint32_t*) &args[1]);
       validate((uint32_t*) &args[2]);
       validate((uint32_t*) args[2]);
       validate((uint32_t*) &args[3]);
       f->eax = write((int) args[1], (void *) args[2], (unsigned) args[3]);
-      break;
-    case SYS_SEEK:
-      validate((uint32_t*) &args[1]);
-      validate((uint32_t*) &args[2]);
-      seek((int) args[1], (unsigned) args[2]);
-      break;
-    case SYS_TELL:
-      validate((uint32_t*) &args[1]);
-      f->eax = tell((int) args[1]);
-      break;
-    case SYS_CLOSE:
-      validate((uint32_t*) &args[1]);
-      close((int) args[1]);
       break;
   }
 } 
@@ -209,16 +169,16 @@ int read (int fd, void *buffer, unsigned size) {
 int write (int fd, const void *buffer, unsigned size) {
   lock_acquire(&global_filesys_lock);
 
-  if (fd >= MAX_POSSIBLE_OPENED || fd == 0 || thread_current()->all_open_files[fd] == NULL) {
-    lock_release(&global_filesys_lock);
-    return -1;
-  }
-
   /* Writing to the console when fd refers to STDOUT. */
   if (fd == 1) {
     putbuf(buffer, size);
     lock_release(&global_filesys_lock);
     return size;
+  }
+
+  if (fd >= MAX_POSSIBLE_OPENED || fd == 0 || thread_current()->all_open_files[fd] == NULL) {
+    lock_release(&global_filesys_lock);
+    return -1;
   }
 
   int write_file = (int) file_write(thread_current()->all_open_files[fd], buffer, size);
