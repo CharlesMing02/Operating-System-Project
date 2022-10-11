@@ -81,9 +81,11 @@ pid_t process_execute(const char* file_name) {
   lock_init(&newconnection->connection_lock);
   sema_init(&newconnection->connection_semaphore, 0);
   newconnection->parent_process = curthread->pcb;
-  newconnection->parent_pid = get_pid(curthread->pcb);
+  //newconnection->parent_pid = get_pid(curthread->pcb);
   newconnection->exited = false;
   newconnection->refcount = 1;
+  newconnection->failed = false;
+  list_init(&curthread->pcb->child_connections);
 
   struct startprocess_data* args = malloc(sizeof(struct startprocess_data));
   args->filename = fn_copy;
@@ -96,7 +98,10 @@ pid_t process_execute(const char* file_name) {
   sema_down(&newconnection->connection_semaphore);
   if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
-    //return -1;
+    return -1;
+  }
+  if (newconnection->failed) {
+    return -1;
   }
   return tid;
 }
@@ -109,17 +114,19 @@ static void start_process(void* args) {
   //unpack args struct
   struct startprocess_data* arguments = (struct startprocess_data*) args;
   struct connection* parent_connection = arguments->parent_connection;
-  char* file_name = arguments->filename;
+  char* file_name_ = arguments->filename;
   struct thread* t = thread_current();
   struct intr_frame if_;
   bool success, pcb_success;
+  char* file_name;
 
   /* Get file name, count number of arguments */
-  char string[strlen(file_name) + 1];
-  strlcpy(string, file_name, strlen(file_name) + 1);
+  char string[strlen(file_name_) + 1];
+  strlcpy(string, file_name_, strlen(file_name_) + 1);
   char* saveptr;
   char* word = strtok_r(string, " ", &saveptr);
   file_name = word;
+  strlcpy(t->name, file_name, strlen(file_name) + 1);
   int argc = 0;
   while (word != NULL) {
     argc++;
@@ -153,20 +160,22 @@ static void start_process(void* args) {
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
   }
+  //sema_up(&parent_connection->connection_semaphore);
 
   if (success) {
     /* Push arguments onto stack before program begins */
     char* esp = (char*) if_.esp;
     char* argv[argc + 1];
     argv[argc] = NULL;
-    strlcpy(string, file_name, strlen(file_name) + 1);
+    strlcpy(string, file_name_, strlen(file_name_) + 1);
     word = strtok_r(string, " ", &saveptr);
     int i = 0;
     while (word != NULL) {
-      esp -= sizeof(word);
-      memcpy(esp, word, sizeof(word));
+      esp -= (strlen(word) + 1);
+      memcpy(esp, word, strlen(word) + 1);
       argv[i] = esp;
       word = strtok_r(NULL, " ", &saveptr);
+      i++;
     }
     // add empty space for 16 byte alignment
     int argsize = sizeof(char*) * (argc + 1) + sizeof(char**) + sizeof(int);
@@ -178,23 +187,25 @@ static void start_process(void* args) {
         memcpy(esp, &zero, 1);
       }
     }
-
+    // push pointers to args
     for (i = argc; i >= 0; i--) {
       esp -= sizeof(char*);
-      memcpy(esp, argv[i], sizeof(char*));
+      memcpy(esp, &argv[i], sizeof(char*));
     }
     // push argv
+    //*(esp - sizeof(char**)) = esp;
     esp -= sizeof(char**);
     char* argv_address = esp + sizeof(char**);
-    memcpy(esp, &argv_address, sizeof(char*));
+    memcpy(esp, &argv_address, sizeof(char**));
     // push argc 
     esp -= sizeof(int);
-    *esp = argc;
+    //*esp = argc;
+    memcpy(esp, &argc, sizeof(int));
     // push fake return address
     esp -= sizeof(void*);
     memcpy(esp, &zero, sizeof(void*));
+    if_.esp = esp;
   }
-
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
   if (!success && pcb_success) {
@@ -208,13 +219,13 @@ static void start_process(void* args) {
   }
 
   /* Clean up. Exit on failure or jump to userspace */
-  palloc_free_page(arguments->filename);
+  palloc_free_page(file_name_);
 
-  //if unsuccessful, sema_up, then destroy parent_connection
   if (!success) {
     //sema_up(&temporary);
+    parent_connection->failed = true;
     sema_up(&parent_connection->connection_semaphore);
-    free(parent_connection);
+    //free(parent_connection);
     thread_exit();
   }
   
@@ -269,7 +280,9 @@ int process_wait(pid_t child_pid UNUSED) {
     return -1;
   }
   if (child_connection->exited == true) {
-    return child_connection->exit_code;
+    int ret = child_connection->exit_code;
+    child_connection->exit_code = -1;
+    return ret;
   }
 
   sema_down(&child_connection->connection_semaphore);
@@ -299,6 +312,7 @@ void process_exit(int status) {
     list_remove(&(cur->pcb->parent_connection->elem));
     free(cur->pcb->parent_connection);
   } else {
+    cur->pcb->parent_connection->exited = true;
     cur->pcb->parent_connection->exit_code = status;
   }
 
@@ -318,16 +332,17 @@ void process_exit(int status) {
       e = list_next(e);
       //CALL LIST REMOVE INSTEAD OF FREE ELEM
       list_remove(&child_connection->elem);
-      free(&child_connection);
+      free(child_connection);
     } else {
       e = list_next(e);
     }
   }
   //*******************dont need to malloc each individual struct within struct, if you malloc the outer struct then the inner structs will be within that memory on the heap
-  free(&cur->pcb->child_connections);
+  //free(&cur->pcb->child_connections);
   sema_up(&cur->pcb->parent_connection->connection_semaphore);
 
   //printf("%s: exit %i", curr->pcb->process_name, status);
+  printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -653,7 +668,7 @@ static bool setup_stack(void** esp) {
   if (kpage != NULL) {
     success = install_page(((uint8_t*)PHYS_BASE) - PGSIZE, kpage, true);
     if (success)
-      *esp = PHYS_BASE;
+      *esp = PHYS_BASE-20;
     else
       palloc_free_page(kpage);
   }

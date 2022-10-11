@@ -5,6 +5,8 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 #include "threads/synch.h"
+#include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 
 static void syscall_handler(struct intr_frame*);
 
@@ -25,6 +27,19 @@ void syscall_init(void) {
   lock_init(&global_filesys_lock); 
 }
 
+void validate(uint32_t* address) {
+  bool valid = true;
+  for (int i = 0; i < 4; i++) {
+    valid = is_user_vaddr(address+i);
+    if (!valid) {
+      process_exit(-1);
+    }
+    if (pagedir_get_page(active_pd(), address+i) == NULL) {
+      process_exit(-1);
+    }
+  }
+}
+
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
   /*
@@ -36,36 +51,81 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   /* printf("System call number: %d\n", args[0]); */
 
-  if (args[0] == SYS_EXIT) {
-    f->eax = args[1];
-    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
-    process_exit((int) args[1]);
-  } else if (args[0] == SYS_PRACTICE) {
-    f->eax = args[1]+1;
-  } else if (args[0] == SYS_HALT) {
-    halt();
-  } else if (args[0] == SYS_EXEC) {
-    f->eax = process_execute((char*) args[1]);
-  } else if (args[0] == SYS_WAIT) {
-    f->eax = process_wait((pid_t) args[1]);   
-  } else if (args[0] == SYS_CREATE) {
-    f->eax = create((const char*) args[1], (unsigned) args[2]);
-  } else if (args[0] == SYS_REMOVE) {
-    f->eax = remove((const char*) args[1]);
-  } else if (args[0] == SYS_OPEN) {
-    f->eax = open((const char*) args[1]);
-  } else if (args[0] == SYS_FILESIZE) {
-    f->eax = filesize((int) args[1]);
-  } else if (args[0] == SYS_READ) {
-    f->eax = read((int) args[1], (void *) args[2], (unsigned) args[3]);
-  } else if (args[0] == SYS_WRITE) {
-    f->eax = write((int) args[1], (void *) args[2], (unsigned) args[3]);
-  } else if (args[0] == SYS_SEEK) {
-    f->eax = seek((int) args[1], (unsigned) args[2]);
-  } else if (args[0] == SYS_TELL) {
-    f->eax = tell((int) args[1]);
-  } else if (args[0] == SYS_CLOSE) {
-    f->eax = close((int) args[1]);
+  validate((uint32_t*) args);
+  switch (args[0]) {
+    case SYS_EXIT:
+      validate((uint32_t*) &args[1]);
+      f->eax = args[1];
+      //printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
+      process_exit((int) args[1]);
+      break;
+    case SYS_PRACTICE:
+      validate((uint32_t*) &args[1]);
+      f->eax = args[1]+1;
+      break;
+    case SYS_HALT:
+      halt();
+      break;
+    case SYS_EXEC:
+      validate((uint32_t*) &args[1]);
+      validate((uint32_t*) args[1]);
+      f->eax = process_execute((char*) args[1]);
+      break;
+    case SYS_WAIT:
+      validate((uint32_t*) &args[1]);
+      f->eax = process_wait((pid_t) args[1]);   
+      break;
+    case SYS_COMPUTE_E:
+      validate((uint32_t*) &args[1]);
+      f->eax = sys_sum_to_e(args[1]);
+      break;
+    case SYS_CREATE:
+      validate((uint32_t*) &args[1]);
+      //validate((uint32_t*) args[1]);
+      validate((uint32_t) &args[2]);
+      f->eax = create((const char*) args[1], (unsigned) args[2]);
+      break;
+    case SYS_REMOVE:
+      validate((uint32_t*) &args[1]);
+      validate((uint32_t*) args[1]);
+      f->eax = remove((const char*) args[1]);
+      break;
+    case SYS_OPEN:
+      validate((uint32_t*) &args[1]);
+      validate((uint32_t*) args[1]);
+      f->eax = open((const char*) args[1]);
+      break;
+    case SYS_FILESIZE:
+      validate((uint32_t*) &args[1])
+      f->eax = filesize((int) args[1]);
+      break;
+    case SYS_READ:
+      validate((uint32_t*) &args[1]);
+      validate((uint32_t*) &args[2]);
+      validate((uint32_t*) args[2]);
+      validate((uint32_t*) &args[3]);
+      f->eax = read((int) args[1], (void *) args[2], (unsigned) args[3]);
+      break;
+    case SYS_WRITE:
+      validate((uint32_t*) &args[1]);
+      validate((uint32_t*) &args[2]);
+      validate((uint32_t*) args[2]);
+      validate((uint32_t*) &args[3]);
+      f->eax = write((int) args[1], (void *) args[2], (unsigned) args[3]);
+      break;
+    case SYS_SEEK:
+      validate((uint32_t*) &args[1]);
+      validate((uint32_t*) &args[2]);
+      f->eax = seek((int) args[1], (unsigned) args[2]);
+      break;
+    case SYS_TELL:
+      validate((uint32_t*) &args[1]);
+      f->eax = tell((int) args[1]);
+      break;
+    case SYS_CLOSE:
+      validate((uint32_t*) &args[1]);
+      f->eax = close((int) args[1]);
+      break;
   }
 } 
 
