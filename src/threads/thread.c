@@ -53,7 +53,6 @@ static long long user_ticks;   /* # of timer ticks in user programs. */
 #define TIME_SLICE 4          /* # of timer ticks to give each thread. */
 static unsigned thread_ticks; /* # of timer ticks since last yield. */
 
-#define MAX_POSSIBLE_OPENED 128     /* Maximum number of files that can remain opened. */
 static void init_thread(struct thread*, const char* name, int priority);
 static bool is_thread(struct thread*) UNUSED;
 static void* alloc_frame(struct thread*, size_t size);
@@ -438,10 +437,11 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   intr_set_level(old_level);
 
   /* Initialize filesys variables. */
-  t->current_file = NULL;
-  t->count_open_files = 2;    /* Initialize as 2 including STDOUT and STDIN */
-  FILE* no_files_open[MAX_POSSIBLE_OPENED] = {NULL};
-  t->all_open_files = no_files_open;
+  #ifdef USERPROG
+    t->current_file = NULL;
+    t->count_open_files = 2;    /* Initialize as 2 including STDOUT and STDIN */
+    t->all_open_files = {NULL};
+  #endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
