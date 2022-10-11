@@ -194,7 +194,7 @@ int read (int fd, void *buffer, unsigned size) {
   /* Reading from the keyboard when fd refers to the STDIN. */
   if (fd == 0) {
     for (unsigned s = 0; s < size; ++s) {
-      (uint8_t *) buffer[s] = input_getc();
+      * (uint8_t *)(buffer + s) = input_getc();
     }
     lock_release(&global_filesys_lock);
     return size;
