@@ -86,6 +86,49 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       validate((uint32_t*) &args[3]);
       f->eax = write((int) args[1], (void *) args[2], (unsigned) args[3]);
       break;
+    case SYS_CREATE:
+      validate((uint32_t*) &args[1]);
+      validate((uint32_t*) args[1]);
+      validate((uint32_t*) &args[2]);
+      f->eax = create((char*) args[1], (unsigned) args[2]);
+      break;
+    case SYS_REMOVE:
+      validate((uint32_t*) &args[1]);
+      validate((uint32_t*) args[1]);
+      f->eax = remove((char*) args[1]);
+      break;
+    case SYS_OPEN:
+      validate((uint32_t*) &args[1]);
+      validate((uint32_t*) args[1]);
+      f->eax = open((char*) args[1]);
+      break;
+    case SYS_FILESIZE:
+      validate((uint32_t*) &args[1]);
+      f->eax = filesize((int) args[1]);
+      break;
+    case SYS_READ:
+      validate((uint32_t*) &args[1]);
+      validate((uint32_t*) &args[2]);
+      validate((uint32_t*) args[2]);
+      validate((uint32_t*) &args[3]);
+      f->eax = read((int) args[1], (void*) args[2], (unsigned) args[3]);
+      break;
+    case SYS_SEEK:
+      validate((uint32_t*) &args[1]);
+      validate((uint32_t*) &args[2]);
+      //f->eax =
+      seek((int) args[1], (unsigned)args[2]);
+      break;
+    case SYS_TELL:
+      validate((uint32_t*) &args[1]);
+      f->eax = tell((int) args[1]);
+      break;
+    case SYS_CLOSE:
+      validate((uint32_t*) &args[1]);
+      //f->eax = 
+      //NOTE: return -1 if fd does not correspond
+      close((int) args[1]);
+      break;
   }
 } 
 

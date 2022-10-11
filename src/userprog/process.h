@@ -42,7 +42,7 @@ struct connection {
   bool exited;
   int exit_code;
   struct list_elem elem;
-  bool failed
+  bool failed;
 };
 
 struct startprocess_data {
