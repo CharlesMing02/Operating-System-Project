@@ -165,7 +165,9 @@ int open (const char *file) {
     new_fd++;
   }
 
+  //file_deny_write(file);
   thread_current()->all_open_files[new_fd] = filesys_open(file);
+
   if (thread_current()->all_open_files[new_fd] == NULL) {
     lock_release(&global_filesys_lock);
     return -1;
@@ -173,6 +175,7 @@ int open (const char *file) {
 
   /* Increment number of open files if successful. */
   thread_current()->count_open_files++;
+  file_deny_write(thread_current()->all_open_files[new_fd]);
 
   lock_release(&global_filesys_lock);
   return new_fd;
@@ -275,6 +278,7 @@ void close (int fd) {
   }
 
   file_close(thread_current()->all_open_files[fd]);
+  file_allow_write(thread_current()->all_open_files[fd]);
   /* Decrement number of open files. */
   thread_current()->count_open_files--;
   thread_current()->all_open_files[fd] = NULL;

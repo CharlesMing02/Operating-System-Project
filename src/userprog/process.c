@@ -482,7 +482,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   }
 
   /* Initiate for filesys */
-  file_deny_write(file);
+  //file_deny_write(file);
   t->current_file = file;
 
   /* Read and verify executable header. */
