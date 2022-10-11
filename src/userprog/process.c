@@ -158,6 +158,7 @@ static void start_process(void* args) {
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
+    asm("fsave (%0)" : : "g"(&if_.fpu_state));
     success = load(file_name, &if_.eip, &if_.esp);
   }
   //sema_up(&parent_connection->connection_semaphore);
