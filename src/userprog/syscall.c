@@ -71,7 +71,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_EXEC:
       validate((uint32_t*) &args[1]);
       validate((uint32_t*) args[1]);
+      lock_acquire(&global_filesys_lock);
       f->eax = process_execute((char*) args[1]);
+      lock_release(&global_filesys_lock);
       break;
     case SYS_WAIT:
       validate((uint32_t*) &args[1]);
@@ -175,7 +177,7 @@ int open (const char *file) {
 
   /* Increment number of open files if successful. */
   thread_current()->count_open_files++;
-  file_deny_write(thread_current()->all_open_files[new_fd]);
+  //file_deny_write(thread_current()->all_open_files[new_fd]);
 
   lock_release(&global_filesys_lock);
   return new_fd;
@@ -278,7 +280,7 @@ void close (int fd) {
   }
 
   file_close(thread_current()->all_open_files[fd]);
-  file_allow_write(thread_current()->all_open_files[fd]);
+  //file_allow_write(thread_current()->all_open_files[fd]);
   /* Decrement number of open files. */
   thread_current()->count_open_files--;
   thread_current()->all_open_files[fd] = NULL;

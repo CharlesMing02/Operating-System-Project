@@ -361,6 +361,8 @@ void process_exit(int status) {
     pagedir_destroy(pd);
   }
 
+  file_close(cur->current_file);
+
   /* Free the PCB of this process and kill this thread
      Avoid race where PCB is freed before t->pcb is set to NULL
      If this happens, then an unfortuantely timed timer interrupt
@@ -482,7 +484,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   }
 
   /* Initiate for filesys */
-  //file_deny_write(file);
+  file_deny_write(file);
   t->current_file = file;
 
   /* Read and verify executable header. */
