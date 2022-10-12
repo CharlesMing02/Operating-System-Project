@@ -81,7 +81,6 @@ pid_t process_execute(const char* file_name) {
   lock_init(&newconnection->connection_lock);
   sema_init(&newconnection->connection_semaphore, 0);
   newconnection->parent_process = curthread->pcb;
-  //newconnection->parent_pid = get_pid(curthread->pcb);
   newconnection->exited = false;
   newconnection->refcount = 1;
   newconnection->failed = false;
@@ -110,7 +109,6 @@ pid_t process_execute(const char* file_name) {
    running. */
 //INCREMENT REFCOUNT IF SUCCESSFUL
 static void start_process(void* args) {
-
   //unpack args struct
   struct startprocess_data* arguments = (struct startprocess_data*) args;
   struct connection* parent_connection = arguments->parent_connection;
@@ -161,7 +159,6 @@ static void start_process(void* args) {
     asm("fsave (%0)" : : "g"(&if_.fpu_state));
     success = load(file_name, &if_.eip, &if_.esp);
   }
-  //sema_up(&parent_connection->connection_semaphore);
 
   if (success) {
     /* Push arguments onto stack before program begins */
@@ -194,13 +191,11 @@ static void start_process(void* args) {
       memcpy(esp, &argv[i], sizeof(char*));
     }
     // push argv
-    //*(esp - sizeof(char**)) = esp;
     esp -= sizeof(char**);
     char* argv_address = esp + sizeof(char**);
     memcpy(esp, &argv_address, sizeof(char**));
     // push argc 
     esp -= sizeof(int);
-    //*esp = argc;
     memcpy(esp, &argc, sizeof(int));
     // push fake return address
     esp -= sizeof(void*);
@@ -223,10 +218,8 @@ static void start_process(void* args) {
   palloc_free_page(file_name_);
 
   if (!success) {
-    //sema_up(&temporary);
     parent_connection->failed = true;
     sema_up(&parent_connection->connection_semaphore);
-    //free(parent_connection);
     thread_exit();
   }
   
@@ -263,8 +256,6 @@ static void start_process(void* args) {
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int process_wait(pid_t child_pid UNUSED) {
-  //sema_down(&temporary);
-  
   bool ischild = false;
   struct connection* child_connection;
   struct thread* t = thread_current();
@@ -292,7 +283,6 @@ int process_wait(pid_t child_pid UNUSED) {
 }
 
 /* Free the current process's resources. */
-//return exit code for wait?
 void process_exit(int status) {
   struct thread* cur = thread_current();
   uint32_t* pd;
@@ -339,10 +329,8 @@ void process_exit(int status) {
     }
   }
   //*******************dont need to malloc each individual struct within struct, if you malloc the outer struct then the inner structs will be within that memory on the heap
-  //free(&cur->pcb->child_connections);
   sema_up(&cur->pcb->parent_connection->connection_semaphore);
 
-  //printf("%s: exit %i", curr->pcb->process_name, status);
   printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
 
   /* Destroy the current process's page directory and switch back
@@ -359,6 +347,7 @@ void process_exit(int status) {
     cur->pcb->pagedir = NULL;
     pagedir_activate(NULL);
     pagedir_destroy(pd);
+    file_close(cur->pcb->executable);
   }
 
   /* Free the PCB of this process and kill this thread
@@ -369,8 +358,6 @@ void process_exit(int status) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-
-  //sema_up(&temporary);
   thread_exit();
 }
 
@@ -482,6 +469,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   }
 
   /* Initiate for filesys */
+  thread_current()->pcb->executable = file;
   file_deny_write(file);
   t->current_file = file;
 
@@ -554,7 +542,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
   return success;
 }
 
