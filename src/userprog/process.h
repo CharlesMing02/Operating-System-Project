@@ -29,7 +29,6 @@ struct process {
   struct thread* main_thread; /* Pointer to main thread */
   struct list child_connections;
   struct connection* parent_connection;
-  struct file* executable;
 };
 
 struct connection {

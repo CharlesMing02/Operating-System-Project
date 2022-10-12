@@ -348,7 +348,6 @@ void process_exit(int status) {
     cur->pcb->pagedir = NULL;
     pagedir_activate(NULL);
     pagedir_destroy(pd);
-    file_close(cur->pcb->executable);
   }
 
   file_close(cur->current_file);
@@ -472,7 +471,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   }
 
   /* Initiate for filesys */
-  thread_current()->pcb->executable = file;
   file_deny_write(file);
   t->current_file = file;
 
