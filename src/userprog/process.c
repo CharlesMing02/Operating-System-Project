@@ -279,7 +279,6 @@ int process_wait(pid_t child_pid UNUSED) {
 
   sema_down(&child_connection->connection_semaphore);
   return child_connection->exit_code;
-  
 }
 
 /* Free the current process's resources. */

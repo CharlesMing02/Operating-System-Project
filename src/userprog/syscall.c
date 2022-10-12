@@ -58,7 +58,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_EXIT:
       validate((uint32_t*) &args[1]);
       f->eax = args[1];
-      //printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
       process_exit((int) args[1]);
       break;
     case SYS_PRACTICE:
