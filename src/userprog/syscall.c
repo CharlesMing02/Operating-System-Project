@@ -70,9 +70,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_EXEC:
       validate((uint32_t*) &args[1]);
       validate((uint32_t*) args[1]);
-      lock_acquire(&global_filesys_lock);
       f->eax = process_execute((char*) args[1]);
-      lock_release(&global_filesys_lock);
       break;
     case SYS_WAIT:
       validate((uint32_t*) &args[1]);
