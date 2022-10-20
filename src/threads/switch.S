@@ -23,13 +23,10 @@ switch_threads:
 	#
 	# This stack frame must match the one set up by thread_create()
 	# in size.
-	leal -108(%esp), %esp
-	fsave (%esp)
 	pushl %ebx
 	pushl %ebp
 	pushl %esi
 	pushl %edi
-	fninit
 
 	# Get offsetof (struct thread, stack).
 .globl thread_stack_ofs
@@ -48,8 +45,6 @@ switch_threads:
 	popl %esi
 	popl %ebp
 	popl %ebx
-	frstor (%esp)
-	leal 108(%esp), %esp
         ret
 .endfunc
 

@@ -18,14 +18,11 @@
 .func intr_entry
 intr_entry:
 	/* Save caller's registers. */
-   leal -108(%esp), %esp
-   fsave (%esp)
 	pushl %ds
 	pushl %es
 	pushl %fs
 	pushl %gs
 	pushal
-   fninit
 
 	/* Set up kernel environment. */
 	cld			/* String instructions go upward. */
@@ -58,8 +55,6 @@ intr_exit:
 	popl %fs
 	popl %es
 	popl %ds
-   frstor (%esp)
-   leal 108(%esp), %esp
 
         /* Discard `struct intr_frame' vec_no, error_code,
            frame_pointer members. */

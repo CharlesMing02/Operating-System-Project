@@ -109,7 +109,6 @@ void thread_init(void) {
   lock_init(&tid_lock);
   list_init(&fifo_ready_list);
   list_init(&all_list);
-  asm volatile("fninit");
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread();
@@ -180,10 +179,8 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   struct switch_entry_frame* ef;
   struct switch_threads_frame* sf;
   tid_t tid;
-  uint8_t cur_thread_fpu[108];
 
   ASSERT(function != NULL);
-  asm volatile("fsave (%0)" : : "g"(&cur_thread_fpu));
 
   /* Allocate thread. */
   t = palloc_get_page(PAL_ZERO);
@@ -208,8 +205,6 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   sf = alloc_frame(t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
-  // init and save FPU for sf, restore saved state for cur thread
-  asm volatile("fninit; fsave (%0); frstor (%1)" : : "g"(&sf->fpu_state), "g"(&cur_thread_fpu));
 
   /* Add to run queue. */
   thread_unblock(t);
@@ -439,14 +434,6 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
   intr_set_level(old_level);
-
-  /* Initialize filesys variables. */
-  #ifdef USERPROG
-    t->current_file = NULL;
-    t->count_open_files = 2;    /* Initialize as 2 including STDOUT and STDIN */
-    struct file* all_open_files[MAX_POSSIBLE_OPENED] = {NULL};
-    t->all_open_files = all_open_files;
-  #endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
