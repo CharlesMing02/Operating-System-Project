@@ -99,6 +99,9 @@ struct thread {
 
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
+
+  int64_t wakeup_time;
+  struct list_elem waiter;
 };
 
 /* Types of scheduler that the user can request the kernel

@@ -24,11 +24,15 @@ static int64_t ticks;
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
+//global list of waiters
+struct list sleeping_threads;
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops(unsigned loops);
 static void busy_wait(int64_t loops);
 static void real_time_sleep(int64_t num, int32_t denom);
 static void real_time_delay(int64_t num, int32_t denom);
+
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -73,14 +77,30 @@ int64_t timer_ticks(void) {
    should be a value once returned by timer_ticks(). */
 int64_t timer_elapsed(int64_t then) { return timer_ticks() - then; }
 
+
+static bool sleep_comparator(const struct list_elem* a, const struct list_elem* b, void* aux) {
+  struct thread* aa = list_entry(a, struct thread, waiter);
+  struct thread* bb = list_entry(b, struct thread, waiter);
+  return aa->wakeup_time < bb->wakeup_time;
+}
+
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
 void timer_sleep(int64_t ticks) {
+  ASSERT(intr_get_level() == INTR_ON);
+
   int64_t start = timer_ticks();
 
-  ASSERT(intr_get_level() == INTR_ON);
-  while (timer_elapsed(start) < ticks)
-    thread_yield();
+  struct thread* t = thread_current();
+  t->wakeup_time = start + ticks;
+
+  enum intr_level old_level = intr_disable();
+  list_insert_ordered(&sleeping_threads, &(t->waiter), &sleep_comparator, NULL);
+  thread_block();
+  intr_set_level(old_level);
+
+  //while (timer_elapsed(start) < ticks)
+    //thread_yield();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -129,6 +149,25 @@ void timer_print_stats(void) { printf("Timer: %" PRId64 " ticks\n", timer_ticks(
 static void timer_interrupt(struct intr_frame* args UNUSED) {
   ticks++;
   thread_tick();
+
+  if (!list_empty(&sleeping_threads)) {
+    int64_t current_time = timer_ticks();
+    struct list_elem* x = list_front(&sleeping_threads);
+    struct thread* t = list_entry(x, struct thread, waiter);
+    while (t->wakeup_time < current_time) {
+      thread_unblock(t);
+      
+      //t->status = THREAD_READY
+
+      list_pop_front(&sleeping_threads);
+      x = list_front(&sleeping_threads);
+      struct thread* t = list_entry(x, struct thread, waiter);
+
+      intr_yield_on_return();
+
+    }
+  }
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
