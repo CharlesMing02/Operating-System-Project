@@ -20,6 +20,9 @@ int sys_close(int handle);
 int sys_practice(int input);
 int sys_compute_e(int n);
 
+/* User Threads Project 2 */
+tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, const void* arg);
+
 void syscall_init(void);
 void safe_file_close(struct file* file);
 

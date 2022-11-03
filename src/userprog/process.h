@@ -20,6 +20,18 @@ typedef tid_t pid_t;
 typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
 
+/* User thread related declarations */
+typedef struct user_thread_entry {
+  struct thread* thread; /* Pointer to related thread */
+  // status or other meta-data
+  struct list_elem elem;
+} user_thread_entry_t;
+
+typedef struct user_thread_list {
+  struct list lst;
+  struct lock lock;
+} user_thread_list_t;
+
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
    PCB from the TCB. All TCBs in a process will have a pointer
@@ -37,6 +49,16 @@ struct process {
   /* Owned by syscall.c. */
   struct list fds; /* List of file descriptors. */
   int next_handle; /* Next handle value. */
+
+  /* Global lock for user threads */
+  struct lock thread_lock;
+
+  /* Process owned list of threads */
+  user_thread_list_t* thread_list;
+
+  /* Holds all locks and semaphores for a given process */
+  struct lock* locks[128];
+  struct semaphore* semaphores[128];
 };
 
 /* Tracks the completion of a process.

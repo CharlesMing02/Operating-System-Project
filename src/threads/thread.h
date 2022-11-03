@@ -97,6 +97,10 @@ struct thread {
   struct process* pcb; /* Process control block if this thread is a userprog */
 #endif
 
+  /* Additional user threads related meta data */
+  bool exited;
+  struct thread* joiner;
+
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
 };
