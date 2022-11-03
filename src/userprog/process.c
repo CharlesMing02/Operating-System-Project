@@ -744,7 +744,6 @@ bool setup_thread(void (**eip)(void), void** esp, void* aux) {
       /* Add tfun to stack */
       memcpy(*esp, &args->tfun, 4);
       *esp -= 4;
-      *esp -= 4;
 
     } else
       palloc_free_page(kpage);
