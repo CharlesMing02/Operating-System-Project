@@ -32,10 +32,19 @@ typedef struct user_thread_list {
   struct lock lock;
 } user_thread_list_t;
 
+/* Used to hold locks and their owner thread's tid */
 typedef struct thread_lock {
   struct lock lock;
   tid_t tid;
 } thread_lock_t;
+
+/* Struct for passing args in thread_create */
+typedef struct thread_create_args {
+  stub_fun sfun;
+  pthread_fun tfun;
+  const void* arg;
+  struct process* pcb;
+} thread_create_args_t;
 
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
@@ -59,7 +68,10 @@ struct process {
   struct lock process_thread_lock;
 
   /* Process owned list of threads */
-  user_thread_list_t* thread_list;
+  user_thread_list_t user_thread_list;
+
+  /* Initialized threads counter for thread_naming */
+  int user_thread_counter;
 
   /* Holds all locks and semaphores for a given process */
   struct thread_lock_t** locks;
@@ -97,7 +109,7 @@ void process_activate(void);
 bool is_main_thread(struct thread*, struct process*);
 pid_t get_pid(struct process*);
 
-tid_t pthread_execute(stub_fun, pthread_fun, void*);
+tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg);
 tid_t pthread_join(tid_t);
 void pthread_exit(void);
 void pthread_exit_main(void);

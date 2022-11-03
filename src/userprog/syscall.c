@@ -31,7 +31,6 @@ void syscall_init(void) {
 
 /* System call handler. */
 static void syscall_handler(struct intr_frame* f) {
-  uint32_t* xxxxxx = ((uint32_t*)f->esp);
   typedef int syscall_function(int, int, int);
   process_thread_lock = &thread_current()->pcb->process_thread_lock;
 
@@ -412,18 +411,7 @@ int sys_compute_e(int n) { return sys_sum_to_e(n); }
 /************* PROJECT 2 *************/
 
 tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, const void* arg) {
-  // // char thread_name[sizeof(thread_current()->)];
-  // lock_acquire(&thread_lock);
-  // tid_t tid = thread_create("process + thread #", PRI_DEFAULT, pthread_execute, args);
-  // // args should be a struct containing sfun, tfun, and arg
-  // // pthread_execute should call start_pthread
-  // // call setup_thread in start_pthread to create thread stack and set up arguments
-  // // acquire thread_list lock
-  // // add entry to thread_list where thread is the current thread, exited = false
-  // // release thread_list lock
-  // lock_release(&thread_lock);
-  // return tid;
-  printf("################################");
+  return pthread_execute(sfun, tfun, arg);
 }
 
 void sys_pt_exit(void) {
@@ -441,7 +429,7 @@ void sys_pt_exit(void) {
   //           &thread_lock);
   //   exit this thread only
   // }
-  printf("################################");
+  printf("############### DEBUG BREAK POINT #################");
 }
 
 tid_t sys_pt_join(tid_t tid) {
@@ -450,6 +438,7 @@ tid_t sys_pt_join(tid_t tid) {
   //         thread_to_join_on's joiner equal to this thread block this thread remove the thread you
   //             are joining on from the thread_list release thread lock return tid of the removed
   //                 thread else release thread_lock return TID_ERROR
+  printf("############### DEBUG BREAK POINT #################");
 }
 
 bool sys_lock_init(lock_t* lock) {
