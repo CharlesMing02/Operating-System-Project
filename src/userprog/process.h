@@ -32,6 +32,11 @@ typedef struct user_thread_list {
   struct lock lock;
 } user_thread_list_t;
 
+typedef struct thread_lock {
+  struct lock lock;
+  tid_t tid;
+} thread_lock_t;
+
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
    PCB from the TCB. All TCBs in a process will have a pointer
@@ -51,14 +56,14 @@ struct process {
   int next_handle; /* Next handle value. */
 
   /* Global lock for user threads */
-  struct lock thread_lock;
+  struct lock process_thread_lock;
 
   /* Process owned list of threads */
   user_thread_list_t* thread_list;
 
   /* Holds all locks and semaphores for a given process */
-  struct lock* locks[128];
-  struct semaphore* semaphores[128];
+  struct thread_lock_t** locks;
+  struct semaphore** semaphores;
 };
 
 /* Tracks the completion of a process.

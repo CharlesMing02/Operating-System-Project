@@ -117,6 +117,19 @@ static void start_process(void* exec_) {
     t->pcb->next_handle = 2;
     t->pcb->main_thread = t;
     strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+
+    /* Initialize threads list */
+    lock_init(&t->pcb->process_thread_lock);
+
+    /* Initialize threads list */
+    list_init(&t->pcb->thread_list);
+
+    /* Initialize locks and semaphores arrays */
+    t->pcb->locks = calloc(256, sizeof(thread_lock_t));
+    t->pcb->semaphores = calloc(256, sizeof(struct semaphore));
+    if (t->pcb->locks == NULL || t->pcb->semaphores == NULL) {
+      success = false;
+    }
   }
 
   /* Allocate wait_status. */

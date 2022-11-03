@@ -22,7 +22,7 @@ static void copy_in(void*, const void*, size_t);
 static struct lock fs_lock;
 
 /* Pointer to current thread global lock */
-struct lock* thread_lock;
+struct lock* process_thread_lock;
 
 void syscall_init(void) {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -31,8 +31,9 @@ void syscall_init(void) {
 
 /* System call handler. */
 static void syscall_handler(struct intr_frame* f) {
+  uint32_t* xxxxxx = ((uint32_t*)f->esp);
   typedef int syscall_function(int, int, int);
-  thread_lock = &thread_current()->pcb->thread_lock;
+  process_thread_lock = &thread_current()->pcb->process_thread_lock;
 
   /* A system call. */
   struct syscall {
@@ -57,16 +58,16 @@ static void syscall_handler(struct intr_frame* f) {
       {1, (syscall_function*)sys_close},
       {1, (syscall_function*)sys_practice},
       {1, (syscall_function*)sys_compute_e},
-      {3, (syscall_function*)sys_pt_create}, /* Creates a new thread */
-      // {0, (syscall_function*)sys_pt_exit},      /* Exits the current thread */
-      // {1, (syscall_function*)sys_pt_join},      /* Waits for thread to finish */
-      // {1, (syscall_function*)sys_lock_init},    /* Initializes a lock */
-      // {1, (syscall_function*)sys_lock_acquire}, /* Acquires a lock */
-      // {1, (syscall_function*)sys_lock_release}, /* Releases a lock */
-      // {2, (syscall_function*)sys_sema_init},    /* Initializes a semaphore */
-      // {1, (syscall_function*)sys_sema_down},    /* Downs a semaphore */
-      // {1, (syscall_function*)sys_sema_up},      /* Ups a semaphore */
-      // {0, (syscall_function*)sys_get_tid}, /* Gets TID of the current thread */
+      {3, (syscall_function*)sys_pt_create},    /* Creates a new thread */
+      {0, (syscall_function*)sys_pt_exit},      /* Exits the current thread */
+      {1, (syscall_function*)sys_pt_join},      /* Waits for thread to finish */
+      {1, (syscall_function*)sys_lock_init},    /* Initializes a lock */
+      {1, (syscall_function*)sys_lock_acquire}, /* Acquires a lock */
+      {1, (syscall_function*)sys_lock_release}, /* Releases a lock */
+      {2, (syscall_function*)sys_sema_init},    /* Initializes a semaphore */
+      {1, (syscall_function*)sys_sema_down},    /* Downs a semaphore */
+      {1, (syscall_function*)sys_sema_up},      /* Ups a semaphore */
+      {0, (syscall_function*)sys_get_tid},      /* Gets TID of the current thread */
   };
 
   const struct syscall* sc;
@@ -425,88 +426,105 @@ tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, const void* arg) {
   printf("################################");
 }
 
-// void sys_pt_exit(void) {
-//   // lock_acquire(&thread_lock);
-//   // release all locks and semaphores in their respective arrays(
-//   //     in struct thread) if (thread_current()->pcb->main_thread == thread_current()->tid) {
-//   //   if joiner
-//   //     is not null unblock it join on all threads free allocated resources inside thread
-//   //         lock_release(&thread_lock);
-//   //   process_exit(0)
-//   // }
-//   // else {
-//   //   set exited =
-//   //       true if joiner is not null unblock it free allocated resources inside thread lock_release(
-//   //           &thread_lock);
-//   //   exit this thread only
-//   // }
-// }
+void sys_pt_exit(void) {
+  // lock_acquire(&thread_lock);
+  // release all locks and semaphores in their respective arrays(
+  //     in struct thread) if (thread_current()->pcb->main_thread == thread_current()->tid) {
+  //   if joiner
+  //     is not null unblock it join on all threads free allocated resources inside thread
+  //         lock_release(&thread_lock);
+  //   process_exit(0)
+  // }
+  // else {
+  //   set exited =
+  //       true if joiner is not null unblock it free allocated resources inside thread lock_release(
+  //           &thread_lock);
+  //   exit this thread only
+  // }
+  printf("################################");
+}
 
-// tid_t sys_pt_join(tid_t tid) {
-//   // acquire thread_lock if current_thread ()->pcb->thread_list contains thread corresponding to
-//   //     tid if thread_to_join_on's exited == false set
-//   //         thread_to_join_on's joiner equal to this thread block this thread remove the thread you
-//   //             are joining on from the thread_list release thread lock return tid of the removed
-//   //                 thread else release thread_lock return TID_ERROR
-// }
+tid_t sys_pt_join(tid_t tid) {
+  // acquire thread_lock if current_thread ()->pcb->thread_list contains thread corresponding to
+  //     tid if thread_to_join_on's exited == false set
+  //         thread_to_join_on's joiner equal to this thread block this thread remove the thread you
+  //             are joining on from the thread_list release thread lock return tid of the removed
+  //                 thread else release thread_lock return TID_ERROR
+}
 
-// bool sys_lock_init(lock_t* lock) {
-//   // lock_acquire(&thread_lock);
-//   // locks_idx = index of next empty element on locks(using while loop) cur_lock =
-//   //     get locks[locks_idx] call lock_init on cur_lock put locks_idx in lock_t *
-//   //     lock lock_release(&thread_lock);
-//   // return true;
-//   // /* pcb has list of locks (unlimited amount), keep track of their ids, allocate locks on heap, locks are shared across threads in same process, use pcb lock so that each process has its own lock (not a thread_lock across all processes) */
-// }
+bool sys_lock_init(lock_t* lock) {
+  thread_lock_t* thread_lock = &thread_current()->pcb->locks[(int8_t)lock];
+  if (thread_lock->tid != NULL) {
+    return false;
+  } else {
+    lock_acquire(process_thread_lock);
+    lock_init(&thread_lock->lock);
+    thread_lock->tid = thread_current()->tid;
+    lock_release(process_thread_lock);
+    return true;
+  }
+}
 
-// bool sys_lock_acquire(lock_t* lock) {
-//   lock_acquire(&thread_lock);
-//   idx = lock // may convert to unsigned if necessary
-//         if locks[idx] is not empty and
-//         lock_held_by_current_thread(locks[idx]) lock_release(&thread_lock);
-//   return false;
-// }
-// else {
-//   ret = lock_try_acquire(locks[idx]);
-//   lock_release(&thread_lock);
-//   return ret;
-// }
-// }
+bool sys_lock_acquire(lock_t* lock) {
+  thread_lock_t* thread_lock = &thread_current()->pcb->locks[(int8_t)lock];
+  if (thread_lock->tid == NULL || thread_lock->tid == thread_current()->tid) {
+    return false;
+  } else {
+    lock_acquire(process_thread_lock);
+    lock_acquire(&thread_lock->lock);
+    thread_lock->tid = thread_current()->tid;
+    lock_release(process_thread_lock);
+    return true;
+  }
+}
 
-// bool sys_lock_release(lock_t* lock) {
-//   lock_acquire(&thread_lock);
-//   idx = lock // may convert to unsigned if necessary
-//         if locks[idx] is not empty and
-//         lock_held_by_current_thread(locks[idx]) lock_release(locks[idx]);
-//   lock_release(&thread_lock);
-//   return true;
-// }
-// else {
-//   lock_release(&thread_lock);
-//   return false;
-// }
-// }
+bool sys_lock_release(lock_t* lock) {
+  thread_lock_t* thread_lock = &thread_current()->pcb->locks[(int8_t)lock];
+  if (thread_lock->tid != thread_current()->tid) {
+    return false;
+  } else {
+    lock_acquire(process_thread_lock);
+    lock_release(&thread_lock->lock);
+    thread_lock->tid = NULL;
+    lock_release(process_thread_lock);
+    return true;
+  }
+}
 
-// bool sys_sema_init(sema_t* sema, int val) {
-//   lock_acquire(&thread_lock);
-//   sema_idx = index of next empty element on semaphores(using while loop) cur_sema =
-//       get semaphores[sema_idx] call sema_init on sema and
-//       val put sema_idx in sema_t * sema lock_release(&thread_lock);
-//   return true;
-// }
+bool sys_sema_init(sema_t* sema, int val) {
+  struct semaphore* semaphore = thread_current()->pcb->semaphores[(int8_t)sema];
+  if (semaphore != NULL) {
+    return false;
+  } else {
+    lock_acquire(process_thread_lock);
+    sema_init(semaphore, val);
+    lock_release(process_thread_lock);
+    return true;
+  }
+}
 
-// bool sys_sema_down(sema_t* sema) {
-//   lock_acquire(&thread_lock);
-//   sema_down(semaphores[sema]);
-//   lock_release(&thread_lock);
-//   return true;
-// }
+bool sys_sema_down(sema_t* sema) {
+  struct semaphore* semaphore = thread_current()->pcb->semaphores[(int8_t)sema];
+  if (semaphore == NULL) {
+    return false;
+  } else {
+    lock_acquire(process_thread_lock);
+    sema_down(semaphore);
+    lock_release(process_thread_lock);
+    return true;
+  }
+}
 
-// bool sys_sema_up(sema_t* sema) {
-//   lock_acquire(&thread_lock);
-//   sema_up(semaphores[sema]);
-//   lock_release(&thread_lock);
-//   return true;
-// }
+bool sys_sema_up(sema_t* sema) {
+  struct semaphore* semaphore = thread_current()->pcb->semaphores[(int8_t)sema];
+  if (semaphore == NULL) {
+    return false;
+  } else {
+    lock_acquire(process_thread_lock);
+    sema_up(semaphore);
+    lock_release(process_thread_lock);
+    return true;
+  }
+}
 
-// tid_t sys_get_tid(void) { return thread_current()->tid; }
+tid_t sys_get_tid(void) { return thread_current()->tid; }

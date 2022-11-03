@@ -4,6 +4,10 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 
+/* Synchronization Types */
+typedef char lock_t;
+typedef char sema_t;
+
 int sys_halt(void);
 int sys_exit(int status);
 int sys_exec(const char* ufile);
@@ -22,6 +26,15 @@ int sys_compute_e(int n);
 
 /* User Threads Project 2 */
 tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, const void* arg);
+void sys_pt_exit(void);
+tid_t sys_pt_join(tid_t tid);
+bool sys_lock_init(lock_t* lock);
+bool sys_lock_acquire(lock_t* lock);
+bool sys_lock_release(lock_t* lock);
+bool sys_sema_init(sema_t* sema, int val);
+bool sys_sema_down(sema_t* sema);
+bool sys_sema_up(sema_t* sema);
+tid_t sys_get_tid(void);
 
 void syscall_init(void);
 void safe_file_close(struct file* file);
