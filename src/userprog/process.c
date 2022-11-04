@@ -733,7 +733,11 @@ bool setup_thread(void (**eip)(void), void** esp, void* aux) {
   /* Setup the stack and eip */
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
   if (kpage != NULL) {
-    success = install_page(((uint8_t*)PHYS_BASE) - 2 * PGSIZE, kpage, true);
+    /* I think we need to offset this further each thread, not quite sure how we would reclaim theses spaces. 
+    One idea would be to mores strictly manage the list of threads and prune finished threads as needed when 
+    a new thread is created. e.g. thread two is dead so we replace #2 with a newly rquested thread. */
+    int offset = 3; // Hardcoded just to try and pass the simple case first
+    success = install_page(((uint8_t*)PHYS_BASE) - offset * PGSIZE, kpage, true);
     if (success) {
       *esp = PHYS_BASE;
 
