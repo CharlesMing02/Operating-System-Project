@@ -414,32 +414,9 @@ tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, const void* arg) {
   return pthread_execute(sfun, tfun, arg);
 }
 
-void sys_pt_exit(void) {
-  // lock_acquire(&thread_lock);
-  // release all locks and semaphores in their respective arrays(
-  //     in struct thread) if (thread_current()->pcb->main_thread == thread_current()->tid) {
-  //   if joiner
-  //     is not null unblock it join on all threads free allocated resources inside thread
-  //         lock_release(&thread_lock);
-  //   process_exit(0)
-  // }
-  // else {
-  //   set exited =
-  //       true if joiner is not null unblock it free allocated resources inside thread lock_release(
-  //           &thread_lock);
-  //   exit this thread only
-  // }
-  printf("############### DEBUG BREAK POINT #################");
-}
+void sys_pt_exit(void) { pthread_exit(); }
 
-tid_t sys_pt_join(tid_t tid) {
-  // acquire thread_lock if current_thread ()->pcb->thread_list contains thread corresponding to
-  //     tid if thread_to_join_on's exited == false set
-  //         thread_to_join_on's joiner equal to this thread block this thread remove the thread you
-  //             are joining on from the thread_list release thread lock return tid of the removed
-  //                 thread else release thread_lock return TID_ERROR
-  printf("############### DEBUG BREAK POINT #################");
-}
+tid_t sys_pt_join(tid_t tid) { pthread_join(tid); }
 
 bool sys_lock_init(lock_t* lock) {
   thread_lock_t* thread_lock = &thread_current()->pcb->locks[(int8_t)lock];

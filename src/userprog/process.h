@@ -24,6 +24,8 @@ typedef void (*stub_fun)(pthread_fun, void*);
 typedef struct user_thread_entry {
   struct thread* thread; /* Pointer to related thread */
   // status or other meta-data
+  bool waited_on;
+  bool completed;
   struct list_elem elem;
 } user_thread_entry_t;
 
@@ -44,6 +46,7 @@ typedef struct thread_create_args {
   pthread_fun tfun;
   const void* arg;
   struct process* pcb;
+  int thread_count_id;
 } thread_create_args_t;
 
 /* The process control block for a given process. Since

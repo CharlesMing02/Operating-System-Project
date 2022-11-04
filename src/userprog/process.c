@@ -82,7 +82,7 @@ pid_t process_execute(const char* file_name) {
   if (tid != TID_ERROR) {
     sema_down(&exec.load_done);
     if (exec.success)
-      list_push_back(&thread_current()->pcb->children, &exec.wait_status->elem);
+      list_push_back((struct list*)&thread_current()->pcb->children, &exec.wait_status->elem);
     else
       tid = TID_ERROR;
   }
@@ -129,7 +129,7 @@ static void start_process(void* exec_) {
       success = false;
     }
     user_thread_entry->thread = t;
-    list_push_front(&t->pcb->user_thread_list, &user_thread_entry->elem);
+    list_push_front((struct list*)&t->pcb->user_thread_list, &user_thread_entry->elem);
 
     /* Set user thread counter */
     t->pcb->user_thread_counter = 1;
@@ -722,24 +722,21 @@ pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
 bool setup_thread(void (**eip)(void), void** esp, void* aux) {
   uint8_t* kpage;
   bool success = false;
-  int length = 0;
-  int size = 0;
-  void** ptr;
   thread_create_args_t* args = (thread_create_args_t*)aux;
 
   /* Set eip to stub function */
-  *eip = args->sfun;
+  *eip = (void*)args->sfun;
 
   /* Setup the stack and eip */
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
   if (kpage != NULL) {
-    /* I think we need to offset this further each thread, not quite sure how we would reclaim theses spaces. 
+    /* We need to offset this further each thread, not quite sure how we would reclaim theses spaces. 
     One idea would be to mores strictly manage the list of threads and prune finished threads as needed when 
     a new thread is created. e.g. thread two is dead so we replace #2 with a newly rquested thread. */
-    int offset = 2; // Hardcoded just to try and pass the simple case first
+    int offset = args->thread_count_id; // Easy way for now
     success = install_page(((uint8_t*)PHYS_BASE) - offset * PGSIZE, kpage, true);
     if (success) {
-      *esp = PHYS_BASE;
+      *esp = PHYS_BASE - (offset - 1) * PGSIZE;
 
       /* Add arg to stack */
       memcpy(*esp, &args->arg, 4);
@@ -777,9 +774,11 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
 
   /* Synch here for counter increment */
   lock_acquire(process_thread_lock);
-  snprintf(new_thread_name, 20, "%s-%d", thread_current()->pcb->main_thread->name,
-           ++thread_current()->pcb->user_thread_counter);
+  args->thread_count_id = ++thread_current()->pcb->user_thread_counter;
   lock_release(process_thread_lock);
+
+  snprintf(new_thread_name, 20, "%s-%d", thread_current()->pcb->main_thread->name,
+           args->thread_count_id);
 
   new_tid = thread_create((const char*)new_thread_name, PRI_DEFAULT, start_pthread, (void*)args);
 
@@ -810,7 +809,9 @@ static void start_pthread(void* exec_) {
     // exit(-1);
   }
   user_thread_entry->thread = t;
-  list_push_back(&t->pcb->user_thread_list, &user_thread_entry->elem);
+  user_thread_entry->waited_on = false;
+  user_thread_entry->completed = false;
+  list_push_back((struct list*)&t->pcb->user_thread_list, &user_thread_entry->elem);
 
   /* Init interupt frame */
   memset(&if_, 0, sizeof if_);
@@ -838,7 +839,41 @@ static void start_pthread(void* exec_) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-tid_t pthread_join(tid_t tid UNUSED) { return -1; }
+tid_t pthread_join(tid_t tid) {
+  struct list_elem* e;
+  user_thread_entry_t* thread_entry;
+  struct lock* process_thread_lock = &thread_current()->pcb->process_thread_lock;
+  bool first_pass = true;
+
+  while (true) {
+    /* Iterate through thread list and update matching elements status to completed */
+    for (e = list_begin(&thread_current()->pcb->user_thread_list.lst);
+         e != list_end(&thread_current()->pcb->user_thread_list.lst); e = list_next(e)) {
+      thread_entry = list_entry(e, user_thread_entry_t, elem);
+      if (thread_entry->thread->tid == tid) {
+        if (first_pass) {
+          /* Synch here for potential modifications to thread list */
+          lock_acquire(process_thread_lock);
+          if (thread_entry->waited_on == true) {
+            lock_release(process_thread_lock);
+            return TID_ERROR;
+          }
+          first_pass = false;
+          thread_entry->waited_on = true;
+          lock_release(process_thread_lock);
+        }
+        if (thread_entry->completed == true) {
+          goto done;
+        }
+        // thread_current()->status = THREAD_BLOCKED;
+        thread_yield();
+        break;
+      }
+    }
+  }
+done:
+  return thread_entry->thread->tid;
+}
 
 /* Free the current thread's resources. Most resources will
    be freed on thread_exit(), so all we have to do is deallocate the
@@ -849,7 +884,22 @@ tid_t pthread_join(tid_t tid UNUSED) { return -1; }
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit(void) {}
+void pthread_exit(void) {
+  struct list_elem* e;
+  user_thread_entry_t* thread_entry;
+
+  /* Iterate through thread list and update matching elements status to completed */
+  for (e = list_begin(&thread_current()->pcb->user_thread_list.lst);
+       e != list_end(&thread_current()->pcb->user_thread_list.lst); e = list_next(e)) {
+    thread_entry = list_entry(e, user_thread_entry_t, elem);
+    if (thread_entry->thread->tid == thread_current()->tid) {
+      thread_entry->completed = true;
+    }
+  }
+
+  // thread_current()->status = THREAD_DYING;
+  thread_exit();
+}
 
 /* Only to be used when the main thread explicitly calls pthread_exit.
    The main thread should wait on all threads in the process to
