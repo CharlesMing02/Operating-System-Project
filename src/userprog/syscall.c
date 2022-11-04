@@ -410,17 +410,17 @@ int sys_compute_e(int n) { return sys_sum_to_e(n); }
 
 /************* PROJECT 2 *************/
 
-tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, const void* arg) {
+tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, void* arg) {
   return pthread_execute(sfun, tfun, arg);
 }
 
 void sys_pt_exit(void) { pthread_exit(); }
 
-tid_t sys_pt_join(tid_t tid) { pthread_join(tid); }
+tid_t sys_pt_join(tid_t tid) { return pthread_join(tid); }
 
 bool sys_lock_init(lock_t* lock) {
-  thread_lock_t* thread_lock = &thread_current()->pcb->locks[(int8_t)lock];
-  if (thread_lock->tid != NULL) {
+  thread_lock_t* thread_lock = (thread_lock_t*)&thread_current()->pcb->locks[(int)lock];
+  if (thread_lock->tid != 0) {
     return false;
   } else {
     lock_acquire(process_thread_lock);
@@ -432,8 +432,8 @@ bool sys_lock_init(lock_t* lock) {
 }
 
 bool sys_lock_acquire(lock_t* lock) {
-  thread_lock_t* thread_lock = &thread_current()->pcb->locks[(int8_t)lock];
-  if (thread_lock->tid == NULL || thread_lock->tid == thread_current()->tid) {
+  thread_lock_t* thread_lock = (thread_lock_t*)&thread_current()->pcb->locks[(int)lock];
+  if (thread_lock->tid == 0 || thread_lock->tid == thread_current()->tid) {
     return false;
   } else {
     lock_acquire(process_thread_lock);
@@ -445,20 +445,20 @@ bool sys_lock_acquire(lock_t* lock) {
 }
 
 bool sys_lock_release(lock_t* lock) {
-  thread_lock_t* thread_lock = &thread_current()->pcb->locks[(int8_t)lock];
+  thread_lock_t* thread_lock = (thread_lock_t*)&thread_current()->pcb->locks[(int)lock];
   if (thread_lock->tid != thread_current()->tid) {
     return false;
   } else {
     lock_acquire(process_thread_lock);
     lock_release(&thread_lock->lock);
-    thread_lock->tid = NULL;
+    thread_lock->tid = 0;
     lock_release(process_thread_lock);
     return true;
   }
 }
 
 bool sys_sema_init(sema_t* sema, int val) {
-  struct semaphore* semaphore = thread_current()->pcb->semaphores[(int8_t)sema];
+  struct semaphore* semaphore = thread_current()->pcb->semaphores[(int)sema];
   if (semaphore != NULL) {
     return false;
   } else {
@@ -470,7 +470,7 @@ bool sys_sema_init(sema_t* sema, int val) {
 }
 
 bool sys_sema_down(sema_t* sema) {
-  struct semaphore* semaphore = thread_current()->pcb->semaphores[(int8_t)sema];
+  struct semaphore* semaphore = thread_current()->pcb->semaphores[(int)sema];
   if (semaphore == NULL) {
     return false;
   } else {
@@ -482,7 +482,7 @@ bool sys_sema_down(sema_t* sema) {
 }
 
 bool sys_sema_up(sema_t* sema) {
-  struct semaphore* semaphore = thread_current()->pcb->semaphores[(int8_t)sema];
+  struct semaphore* semaphore = thread_current()->pcb->semaphores[(int)sema];
   if (semaphore == NULL) {
     return false;
   } else {

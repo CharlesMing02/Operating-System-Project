@@ -25,7 +25,7 @@ int sys_practice(int input);
 int sys_compute_e(int n);
 
 /* User Threads Project 2 */
-tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, const void* arg);
+tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, void* arg);
 void sys_pt_exit(void);
 tid_t sys_pt_join(tid_t tid);
 bool sys_lock_init(lock_t* lock);
