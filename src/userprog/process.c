@@ -843,36 +843,34 @@ tid_t pthread_join(tid_t tid) {
   struct list_elem* e;
   user_thread_entry_t* thread_entry;
   struct lock* process_thread_lock = &thread_current()->pcb->process_thread_lock;
-  bool first_pass = true;
 
-  while (true) {
-    /* Iterate through thread list and update matching elements status to completed */
-    for (e = list_begin(&thread_current()->pcb->user_thread_list.lst);
-         e != list_end(&thread_current()->pcb->user_thread_list.lst); e = list_next(e)) {
-      thread_entry = list_entry(e, user_thread_entry_t, elem);
-      if (thread_entry->thread->tid == tid) {
-        if (first_pass) {
-          /* Synch here for potential modifications to thread list */
-          lock_acquire(process_thread_lock);
-          if (thread_entry->waited_on == true) {
-            lock_release(process_thread_lock);
-            return TID_ERROR;
-          }
-          first_pass = false;
-          thread_entry->waited_on = true;
-          lock_release(process_thread_lock);
-        }
-        if (thread_entry->completed == true) {
-          goto done;
-        }
+  /* Iterate through thread list and update matching elements status to completed */
+  for (e = list_begin(&thread_current()->pcb->user_thread_list.lst);
+       e != list_end(&thread_current()->pcb->user_thread_list.lst); e = list_next(e)) {
+    thread_entry = list_entry(e, user_thread_entry_t, elem);
+
+    /* If the current thread matches */
+    if (thread_entry->thread->tid == tid) {
+      lock_acquire(process_thread_lock);
+
+      /* Check waited on status and proceed accordingly */
+      if (thread_entry->waited_on == true) {
+        lock_release(process_thread_lock);
+        return TID_ERROR;
+      } else {
+        thread_entry->waited_on = true;
+        lock_release(process_thread_lock);
+      }
+
+      /* Now block if/until thread is completed */
+      while (thread_entry->completed == false) {
         // thread_current()->status = THREAD_BLOCKED;
         thread_yield();
-        break;
       }
+      return thread_entry->thread->tid;
     }
   }
-done:
-  return thread_entry->thread->tid;
+  return TID_ERROR;
 }
 
 /* Free the current thread's resources. Most resources will

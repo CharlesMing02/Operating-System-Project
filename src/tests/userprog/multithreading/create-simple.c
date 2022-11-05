@@ -9,7 +9,7 @@ void thread_function(void* arg);
 
 /* Simple thread function that just prints PASS */
 void thread_function(void* arg UNUSED) {
-  printf("############### DEBUG BREAK POINT #################");
+  // printf("############### DEBUG BREAK POINT #################");
   msg("Thread ran.");
 }
 
