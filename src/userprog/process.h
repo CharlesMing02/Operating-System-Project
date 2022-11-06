@@ -24,6 +24,7 @@ typedef void (*stub_fun)(pthread_fun, void*);
 typedef struct user_thread_entry {
   struct thread* thread; /* Pointer to related thread */
   // status or other meta-data
+  tid_t tid;
   bool waited_on;
   bool completed;
   bool initialized;
@@ -76,6 +77,11 @@ struct process {
 
   /* Initialized threads counter for thread_naming */
   int user_thread_counter;
+
+  /* Conditional var related variables foe joins */
+  struct condition join_cond;
+  struct lock join_lock;
+  struct semaphore join_sema;
 
   /* Holds all locks and semaphores for a given process */
   struct thread_lock_t** locks;
