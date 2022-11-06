@@ -26,6 +26,8 @@
    that are ready to run but not actually running. */
 static struct list fifo_ready_list;
 
+static struct list strict_prio_ready_list;
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -110,6 +112,7 @@ void thread_init(void) {
 
   lock_init(&tid_lock);
   list_init(&fifo_ready_list);
+  list_init(&strict_prio_ready_list);
   list_init(&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -230,6 +233,12 @@ void thread_block(void) {
   schedule();
 }
 
+static bool thread_priority_comparator(const struct list_elem* a, const struct list_elem* b, void* aux) {
+  struct thread* threadA = list_entry(a, struct thread, elem);
+  struct thread* threadB = list_entry(b, struct thread, elem);
+  return threadA->effective_priority > threadB->effective_priority;
+}
+
 /* Places a thread on the ready structure appropriate for the
    current active scheduling policy.
    
@@ -240,6 +249,8 @@ static void thread_enqueue(struct thread* t) {
 
   if (active_sched_policy == SCHED_FIFO)
     list_push_back(&fifo_ready_list, &t->elem);
+  else if (active_sched_policy == SCHED_PRIO) 
+    list_insert_ordered(&strict_prio_ready_list, &t->elem, thread_priority_comparator, NULL);
   else
     PANIC("Unimplemented scheduling policy value: %d", active_sched_policy);
 }
@@ -332,10 +343,19 @@ void thread_foreach(thread_action_func* func, void* aux) {
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void thread_set_priority(int new_priority) { thread_current()->priority = new_priority; }
+void thread_set_priority(int new_priority) {
+  enum intr_level old_level = intr_disable(); 
+  struct thread* t = thread_current();
+  t->priority = new_priority; 
+  if (new_priority > t->effective_priority) {
+    t->effective_priority = new_priority;
+  }
+  intr_set_level(old_level);
+  thread_yield();
+}
 
 /* Returns the current thread's priority. */
-int thread_get_priority(void) { return thread_current()->priority; }
+int thread_get_priority(void) { return thread_current()->effective_priority; }
 
 /* Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED) { /* Not yet implemented. */
@@ -437,6 +457,10 @@ static void init_thread(struct thread* t, const char* name, int priority) {
 
   t->wakeup_time = 0; //WHAT SHOULD THE INITIAL WAKEUP TIME BE?
 
+  t->effective_priority = priority;
+  list_init(&t->waiting_on);
+  list_init(&t->acquired_locks);
+
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
   intr_set_level(old_level);
@@ -463,7 +487,10 @@ static struct thread* thread_schedule_fifo(void) {
 
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
-  PANIC("Unimplemented scheduler policy: \"-sched=prio\"");
+  if (!list_empty(&strict_prio_ready_list))
+    return list_entry(list_pop_front(&strict_prio_ready_list), struct thread, elem);
+  else
+    return idle_thread;
 }
 
 /* Fair priority scheduler */

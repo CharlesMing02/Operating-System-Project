@@ -102,6 +102,11 @@ struct thread {
 
   int64_t wakeup_time;
   struct list_elem waiter;
+
+  int effective_priority;
+  struct list waiting_on;
+  struct list_elem waiting_on_elem;
+  struct list acquired_locks;
 };
 
 /* Types of scheduler that the user can request the kernel
