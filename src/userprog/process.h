@@ -26,6 +26,7 @@ typedef struct user_thread_entry {
   // status or other meta-data
   bool waited_on;
   bool completed;
+  bool initialized;
   struct list_elem elem;
 } user_thread_entry_t;
 
@@ -116,5 +117,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg);
 tid_t pthread_join(tid_t);
 void pthread_exit(void);
 void pthread_exit_main(void);
+user_thread_entry_t* create_thread_entry(tid_t tid);
+user_thread_entry_t* get_thread_entry(tid_t tid);
 
 #endif /* userprog/process.h */

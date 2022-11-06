@@ -765,6 +765,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   struct lock* process_thread_lock = &thread_current()->pcb->process_thread_lock;
   char new_thread_name[21];
   tid_t new_tid;
+  user_thread_entry_t* user_thread_entry;
   thread_create_args_t* args = malloc(sizeof(thread_create_args_t));
 
   args->sfun = sfun;
@@ -782,6 +783,15 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
 
   new_tid = thread_create((const char*)new_thread_name, PRI_DEFAULT, start_pthread, (void*)args);
 
+  /* Double check for new thread entry and create as uninitialized if need be 
+  in order to avoid race conditions on future potential joins */
+  lock_acquire(process_thread_lock);
+  user_thread_entry = get_thread_entry(new_tid);
+  if (!user_thread_entry) {
+    create_thread_entry(new_tid);
+  }
+  lock_release(process_thread_lock);
+
   return new_tid;
 }
 
@@ -793,6 +803,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
    should be similar to start_process (). For now, it does nothing. */
 static void start_pthread(void* exec_) {
   struct thread* t = thread_current();
+  struct lock* process_thread_lock = &thread_current()->pcb->process_thread_lock;
   thread_create_args_t* args = (thread_create_args_t*)exec_;
   user_thread_entry_t* user_thread_entry;
   struct intr_frame if_;
@@ -802,16 +813,14 @@ static void start_pthread(void* exec_) {
   /* Copy PCB pointer */
   t->pcb = args->pcb;
 
-  /* Add itself to thread list */
-  user_thread_entry = calloc(1, sizeof(user_thread_entry_t));
-  if (user_thread_entry == NULL) {
-    /* TODO: How or even should we exit with failure? */
-    // exit(-1);
+  /* Add itself to thread list or update if applicable */
+  lock_acquire(process_thread_lock);
+  user_thread_entry = get_thread_entry(t->tid);
+  if (!user_thread_entry) {
+    user_thread_entry = create_thread_entry(t->tid);
   }
-  user_thread_entry->thread = t;
-  user_thread_entry->waited_on = false;
-  user_thread_entry->completed = false;
-  list_push_back((struct list*)&t->pcb->user_thread_list, &user_thread_entry->elem);
+  user_thread_entry->initialized = true;
+  lock_release(process_thread_lock);
 
   /* Init interupt frame */
   memset(&if_, 0, sizeof if_);
@@ -908,3 +917,42 @@ void pthread_exit(void) {
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
 void pthread_exit_main(void) {}
+
+user_thread_entry_t* create_thread_entry(tid_t tid) {
+  struct thread* t = thread_current();
+  struct lock* process_thread_lock = &thread_current()->pcb->process_thread_lock;
+
+  user_thread_entry_t* user_thread_entry = calloc(1, sizeof(user_thread_entry_t));
+  if (user_thread_entry == NULL) {
+    /* TODO: How or even should we exit with failure? */
+    // exit(-1);
+  }
+
+  if (tid = t->tid) {
+    user_thread_entry->thread = t;
+  } else {
+    user_thread_entry->thread = NULL;
+  }
+
+  user_thread_entry->waited_on = false;
+  user_thread_entry->completed = false;
+  user_thread_entry->initialized = false;
+
+  list_push_back((struct list*)&t->pcb->user_thread_list, &user_thread_entry->elem);
+}
+
+user_thread_entry_t* get_thread_entry(tid_t tid) {
+  struct list_elem* e;
+  user_thread_entry_t* thread_entry;
+
+  for (e = list_begin(&thread_current()->pcb->user_thread_list.lst);
+       e != list_end(&thread_current()->pcb->user_thread_list.lst); e = list_next(e)) {
+    thread_entry = list_entry(e, user_thread_entry_t, elem);
+
+    /* Return the current thread matches */
+    if (thread_entry->thread->tid == tid) {
+      return thread_entry;
+    }
+  }
+  return NULL;
+}
