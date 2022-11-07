@@ -419,11 +419,12 @@ void sys_pt_exit(void) { pthread_exit(); }
 tid_t sys_pt_join(tid_t tid) { return pthread_join(tid); }
 
 bool sys_lock_init(lock_t* lock) {
+  if (lock == NULL) {
+    return false;
+  }
+
   thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
   struct lock test;
-  lock_init(&test);
-  lock_acquire(&test);
-  lock_release(&test);
 
   if (thread_lock->tid != 0) {
     return false;
@@ -436,6 +437,10 @@ bool sys_lock_init(lock_t* lock) {
 }
 
 bool sys_lock_acquire(lock_t* lock) {
+  if (lock == NULL) {
+    return false;
+  }
+
   thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
   if (thread_lock->tid == thread_current()->tid) {
     return false;
@@ -449,6 +454,10 @@ bool sys_lock_acquire(lock_t* lock) {
 }
 
 bool sys_lock_release(lock_t* lock) {
+  if (lock == NULL) {
+    return false;
+  }
+
   thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
   if (thread_lock->tid != thread_current()->tid) {
     return false;
@@ -462,6 +471,10 @@ bool sys_lock_release(lock_t* lock) {
 }
 
 bool sys_sema_init(sema_t* sema, int val) {
+  if (sema == NULL) {
+    return false;
+  }
+
   thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
   if (thread_sema->initialized) {
     return false;
@@ -475,6 +488,10 @@ bool sys_sema_init(sema_t* sema, int val) {
 }
 
 bool sys_sema_down(sema_t* sema) {
+  if (sema == NULL) {
+    return false;
+  }
+
   thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
   if (!thread_sema->initialized) {
     return false;
@@ -487,6 +504,10 @@ bool sys_sema_down(sema_t* sema) {
 }
 
 bool sys_sema_up(sema_t* sema) {
+  if (sema == NULL) {
+    return false;
+  }
+
   thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
   if (!thread_sema->initialized) {
     return false;
