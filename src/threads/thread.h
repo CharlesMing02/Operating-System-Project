@@ -105,7 +105,6 @@ struct thread {
 
   int effective_priority;
   struct list waiting_on;
-  struct list_elem waiting_on_elem;
   struct list acquired_locks;
 };
 

@@ -346,10 +346,8 @@ void thread_foreach(thread_action_func* func, void* aux) {
 void thread_set_priority(int new_priority) {
   enum intr_level old_level = intr_disable(); 
   struct thread* t = thread_current();
-  t->priority = new_priority; 
-  if (new_priority > t->effective_priority) {
-    t->effective_priority = new_priority;
-  }
+  t->priority = new_priority;
+  t->effective_priority = new_priority; 
   intr_set_level(old_level);
   thread_yield();
 }
@@ -455,7 +453,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
 
-  t->wakeup_time = 0; //WHAT SHOULD THE INITIAL WAKEUP TIME BE?
+  t->wakeup_time = 0;
 
   t->effective_priority = priority;
   list_init(&t->waiting_on);
