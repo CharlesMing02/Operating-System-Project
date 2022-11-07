@@ -138,9 +138,6 @@ static void start_process(void* exec_) {
     cond_init(&t->pcb->join_cond);
     lock_init(&t->pcb->join_lock);
 
-    /* Initialize locks and semaphores arrays */
-    t->pcb->locks = calloc(256, sizeof(thread_lock_t));
-    t->pcb->semaphores = calloc(256, sizeof(struct semaphore));
     if (t->pcb->locks == NULL || t->pcb->semaphores == NULL) {
       success = false;
     }

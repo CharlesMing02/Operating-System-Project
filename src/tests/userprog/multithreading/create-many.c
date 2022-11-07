@@ -15,7 +15,7 @@ void thread_function(void* arg_) {
 }
 
 void test_main(void) {
-  syn_msg = true;
+  // syn_msg = true;
   int arg = 162;
   tid_t tids[NUM_THREADS];
 
@@ -28,5 +28,5 @@ void test_main(void) {
     pthread_check_join(tids[i]);
 
   msg("Main finished");
-  syn_msg = false;
+  // syn_msg = false;
 }

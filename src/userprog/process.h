@@ -42,6 +42,12 @@ typedef struct thread_lock {
   tid_t tid;
 } thread_lock_t;
 
+/* Used to hold semaphores and their metadata */
+typedef struct thread_sema {
+  struct semaphore sema;
+  bool initialized;
+} thread_sema_t;
+
 /* Struct for passing args in thread_create */
 typedef struct thread_create_args {
   stub_fun sfun;
@@ -84,8 +90,8 @@ struct process {
   struct semaphore join_sema;
 
   /* Holds all locks and semaphores for a given process */
-  struct thread_lock_t** locks;
-  struct semaphore** semaphores;
+  thread_lock_t locks[256];
+  thread_sema_t semaphores[256];
 };
 
 /* Tracks the completion of a process.
