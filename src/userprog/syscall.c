@@ -18,8 +18,13 @@
 static void syscall_handler(struct intr_frame*);
 static void copy_in(void*, const void*, size_t);
 
+bool retval;
+
 /* Serializes file system operations. */
 static struct lock fs_lock;
+
+/* Pointer to current thread global lock */
+struct lock* process_thread_lock;
 
 void syscall_init(void) {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -29,6 +34,7 @@ void syscall_init(void) {
 /* System call handler. */
 static void syscall_handler(struct intr_frame* f) {
   typedef int syscall_function(int, int, int);
+  process_thread_lock = &thread_current()->pcb->process_thread_lock;
 
   /* A system call. */
   struct syscall {
@@ -53,6 +59,16 @@ static void syscall_handler(struct intr_frame* f) {
       {1, (syscall_function*)sys_close},
       {1, (syscall_function*)sys_practice},
       {1, (syscall_function*)sys_compute_e},
+      {3, (syscall_function*)sys_pt_create},    /* Creates a new thread */
+      {0, (syscall_function*)sys_pt_exit},      /* Exits the current thread */
+      {1, (syscall_function*)sys_pt_join},      /* Waits for thread to finish */
+      {1, (syscall_function*)sys_lock_init},    /* Initializes a lock */
+      {1, (syscall_function*)sys_lock_acquire}, /* Acquires a lock */
+      {1, (syscall_function*)sys_lock_release}, /* Releases a lock */
+      {2, (syscall_function*)sys_sema_init},    /* Initializes a semaphore */
+      {1, (syscall_function*)sys_sema_down},    /* Downs a semaphore */
+      {1, (syscall_function*)sys_sema_up},      /* Ups a semaphore */
+      {0, (syscall_function*)sys_get_tid},      /* Gets TID of the current thread */
   };
 
   const struct syscall* sc;
@@ -393,3 +409,135 @@ int sys_practice(int input) { return input + 1; }
 
 /* Compute e and return a float cast to an int */
 int sys_compute_e(int n) { return sys_sum_to_e(n); }
+
+/************* PROJECT 2 *************/
+
+tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, void* arg) {
+  return pthread_execute(sfun, tfun, arg);
+}
+
+void sys_pt_exit(void) { pthread_exit(); }
+
+tid_t sys_pt_join(tid_t tid) { return pthread_join(tid); }
+
+bool sys_lock_init(lock_t* lock) {
+  /* Note: 'return false;' doesn't work, need a temp bool to work */
+  if (lock == NULL) {
+    retval = false;
+    return retval;
+  }
+
+  thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
+  struct lock test;
+
+  if (thread_lock->tid != 0) {
+    retval = false;
+    return retval;
+  } else {
+    lock_acquire(process_thread_lock);
+    lock_init(&thread_lock->lock);
+    lock_release(process_thread_lock);
+    retval = true;
+    return retval;
+  }
+}
+
+bool sys_lock_acquire(lock_t* lock) {
+  if (lock == NULL) {
+    retval = false;
+    return retval;
+  }
+
+  thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
+  if (thread_lock->tid == thread_current()->tid) {
+    retval = false;
+    return retval;
+  } else {
+    lock_acquire(process_thread_lock);
+    lock_acquire(&thread_lock->lock);
+    thread_lock->tid = thread_current()->tid;
+    lock_release(process_thread_lock);
+    retval = true;
+    return retval;
+  }
+}
+
+bool sys_lock_release(lock_t* lock) {
+  if (lock == NULL) {
+    retval = false;
+    return retval;
+  }
+
+  thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
+  if (thread_lock->tid != thread_current()->tid) {
+    retval = false;
+    return retval;
+  } else {
+    lock_acquire(process_thread_lock);
+    lock_release(&thread_lock->lock);
+    thread_lock->tid = 0;
+    lock_release(process_thread_lock);
+    retval = true;
+    return retval;
+  }
+}
+
+bool sys_sema_init(sema_t* sema, int val) {
+  if (sema == NULL || val == NULL || val < 0) {
+    retval = false;
+    return retval;
+  }
+
+  thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
+  if (thread_sema->initialized) {
+    retval = false;
+    return retval;
+  } else {
+    lock_acquire(process_thread_lock);
+    sema_init(&thread_sema->sema, val);
+    thread_sema->initialized = true;
+    lock_release(process_thread_lock);
+    retval = true;
+    return retval;
+  }
+}
+
+bool sys_sema_down(sema_t* sema) {
+  if (sema == NULL) {
+    retval = false;
+    return retval;
+  }
+
+  thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
+  if (!thread_sema->initialized) {
+    retval = false;
+    return retval;
+  } else {
+    lock_acquire(process_thread_lock);
+    sema_down(&thread_sema->sema);
+    lock_release(process_thread_lock);
+    retval = true;
+    return retval;
+  }
+}
+
+bool sys_sema_up(sema_t* sema) {
+  if (sema == NULL) {
+    retval = false;
+    return retval;
+  }
+
+  thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
+  if (!thread_sema->initialized) {
+    retval = false;
+    return retval;
+  } else {
+    lock_acquire(process_thread_lock);
+    sema_up(&thread_sema->sema);
+    lock_release(process_thread_lock);
+    retval = true;
+    return retval;
+  }
+}
+
+tid_t sys_get_tid(void) { return thread_current()->tid; }

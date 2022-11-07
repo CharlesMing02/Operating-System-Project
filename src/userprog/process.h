@@ -20,6 +20,43 @@ typedef tid_t pid_t;
 typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
 
+/* User thread related declarations */
+typedef struct user_thread_entry {
+  struct thread* thread; /* Pointer to related thread */
+  // status or other meta-data
+  tid_t tid;
+  bool waited_on;
+  bool completed;
+  bool initialized;
+  struct list_elem elem;
+} user_thread_entry_t;
+
+typedef struct user_thread_list {
+  struct list lst;
+  struct lock lock;
+} user_thread_list_t;
+
+/* Used to hold locks and their owner thread's tid */
+typedef struct thread_lock {
+  struct lock lock;
+  tid_t tid;
+} thread_lock_t;
+
+/* Used to hold semaphores and their metadata */
+typedef struct thread_sema {
+  struct semaphore sema;
+  bool initialized;
+} thread_sema_t;
+
+/* Struct for passing args in thread_create */
+typedef struct thread_create_args {
+  stub_fun sfun;
+  pthread_fun tfun;
+  const void* arg;
+  struct process* pcb;
+  int thread_count_id;
+} thread_create_args_t;
+
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
    PCB from the TCB. All TCBs in a process will have a pointer
@@ -37,6 +74,24 @@ struct process {
   /* Owned by syscall.c. */
   struct list fds; /* List of file descriptors. */
   int next_handle; /* Next handle value. */
+
+  /* Global lock for user threads */
+  struct lock process_thread_lock;
+
+  /* Process owned list of threads */
+  user_thread_list_t user_thread_list;
+
+  /* Initialized threads counter for thread_naming */
+  int user_thread_counter;
+
+  /* Conditional var related variables foe joins */
+  struct condition join_cond;
+  struct lock join_lock;
+  struct semaphore join_sema;
+
+  /* Holds all locks and semaphores for a given process */
+  thread_lock_t locks[256];
+  thread_sema_t semaphores[256];
 };
 
 /* Tracks the completion of a process.
@@ -70,9 +125,11 @@ void process_activate(void);
 bool is_main_thread(struct thread*, struct process*);
 pid_t get_pid(struct process*);
 
-tid_t pthread_execute(stub_fun, pthread_fun, void*);
+tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg);
 tid_t pthread_join(tid_t);
 void pthread_exit(void);
 void pthread_exit_main(void);
+user_thread_entry_t* create_thread_entry(tid_t tid);
+user_thread_entry_t* get_thread_entry(tid_t tid);
 
 #endif /* userprog/process.h */
