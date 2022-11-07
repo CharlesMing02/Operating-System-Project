@@ -483,7 +483,7 @@ bool sys_lock_release(lock_t* lock) {
 }
 
 bool sys_sema_init(sema_t* sema, int val) {
-  if (sema == NULL) {
+  if (sema == NULL || val == NULL || val < 0) {
     retval = false;
     return retval;
   }
