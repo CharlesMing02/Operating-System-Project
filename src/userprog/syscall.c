@@ -449,7 +449,7 @@ bool sys_lock_acquire(lock_t* lock) {
   }
 
   thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
-  if (thread_lock->tid == thread_current()->tid) {
+  if (thread_lock->tid == thread_current()->tid || (&thread_lock->lock)->initialized != true) {
     retval = false;
     return retval;
   } else {
