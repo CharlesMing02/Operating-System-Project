@@ -181,7 +181,6 @@ void lock_init(struct lock* lock) {
 
   lock->holder = NULL;
   sema_init(&lock->semaphore, 1);
-  lock->initialized = true;
 }
 
 // takes the lock with the higher max priority thread waiting on it

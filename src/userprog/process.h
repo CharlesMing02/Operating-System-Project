@@ -46,7 +46,6 @@ typedef struct thread_lock {
 /* Used to hold semaphores and their metadata */
 typedef struct thread_sema {
   struct semaphore sema;
-  tid_t tid;
   bool initialized;
 } thread_sema_t;
 

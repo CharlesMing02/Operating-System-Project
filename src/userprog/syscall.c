@@ -511,7 +511,7 @@ bool sys_sema_init(sema_t* sema, int val) {
     if (!t->pcb->semaphores[i].initialized) {
       lock_acquire(process_thread_lock);
       t->pcb->semaphores[i].initialized = true;
-      t->pcb->semaphores[i].tid = t->tid;
+      // t->pcb->semaphores[i].tid = t->tid;
       sema_init(&t->pcb->semaphores[i].sema, val);
       *sema = (sema_t)i;
       lock_release(process_thread_lock);
@@ -543,7 +543,7 @@ bool sys_sema_down(sema_t* sema) {
   }
 
   thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
-  if (thread_sema->tid != thread_current()->tid || thread_sema->initialized != true) {
+  if (thread_sema->initialized != true) {
     retval = false;
     return retval;
   } else {
@@ -562,7 +562,7 @@ bool sys_sema_up(sema_t* sema) {
   }
 
   thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
-  if (thread_sema->tid != thread_current()->tid || thread_sema->initialized != true) {
+  if (thread_sema->initialized != true) {
     retval = false;
     return retval;
   } else {
