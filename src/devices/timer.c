@@ -157,7 +157,9 @@ static void timer_interrupt(struct intr_frame* args UNUSED) {
     if (t->wakeup_time <= current_time) {
       thread_unblock(t);
       list_pop_front(&sleeping_threads);
-      intr_yield_on_return();
+      if (t->effective_priority > thread_current()->effective_priority) {
+        intr_yield_on_return();
+      }
     } else {
       break;
     }

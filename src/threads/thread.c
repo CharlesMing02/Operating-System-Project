@@ -239,7 +239,7 @@ void thread_block(void) {
 static bool thread_priority_comparator(const struct list_elem* a, const struct list_elem* b, void* aux) {
   struct thread* threadA = list_entry(a, struct thread, elem);
   struct thread* threadB = list_entry(b, struct thread, elem);
-  return threadA->effective_priority > threadB->effective_priority;
+  return threadA->effective_priority < threadB->effective_priority;
 }
 
 /* Places a thread on the ready structure appropriate for the
@@ -350,7 +350,9 @@ void thread_set_priority(int new_priority) {
   enum intr_level old_level = intr_disable(); 
   struct thread* t = thread_current();
   t->priority = new_priority;
-  t->effective_priority = new_priority; 
+  if (new_priority > t->effective_priority) {
+    t->effective_priority = new_priority; 
+  }
   intr_set_level(old_level);
   thread_yield();
 }
@@ -489,7 +491,7 @@ static struct thread* thread_schedule_fifo(void) {
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
   if (!list_empty(&strict_prio_ready_list))
-    return list_entry(list_pop_front(&strict_prio_ready_list), struct thread, elem);
+    return list_entry(list_pop_back(&strict_prio_ready_list), struct thread, elem);
   else
     return idle_thread;
 }
