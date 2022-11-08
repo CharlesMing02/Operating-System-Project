@@ -101,15 +101,15 @@ struct thread {
   bool exited;
   struct thread* joiner;
 
-  /* Owned by thread.c. */
-  unsigned magic; /* Detects stack overflow. */
-
   int64_t wakeup_time;
   struct list_elem waiter;
 
   int effective_priority;
   struct list waiting_on;
   struct list acquired_locks;
+  
+  /* Owned by thread.c. */
+  unsigned magic; /* Detects stack overflow. */
 };
 
 /* Types of scheduler that the user can request the kernel

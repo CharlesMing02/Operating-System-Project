@@ -427,19 +427,34 @@ bool sys_lock_init(lock_t* lock) {
     return retval;
   }
 
-  thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
-  struct lock test;
-
-  if (thread_lock->tid != 0) {
-    retval = false;
-    return retval;
-  } else {
-    lock_acquire(process_thread_lock);
-    lock_init(&thread_lock->lock);
-    lock_release(process_thread_lock);
-    retval = true;
-    return retval;
+  // thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
+  struct thread *t = thread_current();
+  for (uint8_t i = 0; i < 256; i++) {
+    if (!t->pcb->locks[i].initialized) {
+      lock_acquire(process_thread_lock);
+      t->pcb->locks[i].initialized = true;
+      t->pcb->locks[i].tid = t->tid;
+      lock_init(&t->pcb->locks[i].lock);
+      *lock = (lock_t)i;
+      lock_release(process_thread_lock);
+      retval = true;
+      return retval;
+    }
   }
+  retval = false;
+  return retval;
+
+  // this might be wrong, look into it tmr
+  // if (thread_lock->tid != 0) {
+  //   retval = false;
+  //   return retval;
+  // } else {
+  //   lock_acquire(process_thread_lock);
+  //   lock_init(&thread_lock->lock);
+  //   lock_release(process_thread_lock);
+  //   retval = true;
+  //   return retval;
+  // }
 }
 
 bool sys_lock_acquire(lock_t* lock) {
@@ -449,7 +464,10 @@ bool sys_lock_acquire(lock_t* lock) {
   }
 
   thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
-  if (thread_lock->tid == thread_current()->tid || (&thread_lock->lock)->initialized != true) {
+  if (thread_lock->tid != thread_current()->tid || thread_lock->initialized != true) {
+    retval = false;
+    return retval;
+  } else if (lock_held_by_current_thread(&thread_lock->lock)) {
     retval = false;
     return retval;
   } else {
@@ -469,7 +487,7 @@ bool sys_lock_release(lock_t* lock) {
   }
 
   thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
-  if (thread_lock->tid != thread_current()->tid) {
+  if (thread_lock->tid != thread_current()->tid || thread_lock->initialized != true) {
     retval = false;
     return retval;
   } else {
@@ -483,23 +501,39 @@ bool sys_lock_release(lock_t* lock) {
 }
 
 bool sys_sema_init(sema_t* sema, int val) {
-  if (sema == NULL || val == NULL || val < 0) {
+  if (sema == NULL || val < 0) {
     retval = false;
     return retval;
   }
 
-  thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
-  if (thread_sema->initialized) {
-    retval = false;
-    return retval;
-  } else {
-    lock_acquire(process_thread_lock);
-    sema_init(&thread_sema->sema, val);
-    thread_sema->initialized = true;
-    lock_release(process_thread_lock);
-    retval = true;
-    return retval;
+  struct thread *t = thread_current();
+  for (uint8_t i = 0; i < 256; i++) {
+    if (!t->pcb->semaphores[i].initialized) {
+      lock_acquire(process_thread_lock);
+      t->pcb->semaphores[i].initialized = true;
+      t->pcb->semaphores[i].tid = t->tid;
+      sema_init(&t->pcb->semaphores[i].sema, val);
+      *sema = (sema_t)i;
+      lock_release(process_thread_lock);
+      retval = true;
+      return retval;
+    }
   }
+  retval = false;
+  return retval;
+
+  // thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
+  // if (thread_sema->initialized) {
+  //   retval = false;
+  //   return retval;
+  // } else {
+  //   lock_acquire(process_thread_lock);
+  //   sema_init(&thread_sema->sema, val);
+  //   thread_sema->initialized = true;
+  //   lock_release(process_thread_lock);
+  //   retval = true;
+  //   return retval;
+  // }
 }
 
 bool sys_sema_down(sema_t* sema) {
@@ -509,7 +543,7 @@ bool sys_sema_down(sema_t* sema) {
   }
 
   thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
-  if (!thread_sema->initialized) {
+  if (thread_sema->tid != thread_current()->tid || thread_sema->initialized != true) {
     retval = false;
     return retval;
   } else {
@@ -528,7 +562,7 @@ bool sys_sema_up(sema_t* sema) {
   }
 
   thread_sema_t* thread_sema = &thread_current()->pcb->semaphores[(uint8_t)*sema];
-  if (!thread_sema->initialized) {
+  if (thread_sema->tid != thread_current()->tid || thread_sema->initialized != true) {
     retval = false;
     return retval;
   } else {

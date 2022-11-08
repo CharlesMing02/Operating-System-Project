@@ -40,11 +40,13 @@ typedef struct user_thread_list {
 typedef struct thread_lock {
   struct lock lock;
   tid_t tid;
+  bool initialized;
 } thread_lock_t;
 
 /* Used to hold semaphores and their metadata */
 typedef struct thread_sema {
   struct semaphore sema;
+  tid_t tid;
   bool initialized;
 } thread_sema_t;
 
