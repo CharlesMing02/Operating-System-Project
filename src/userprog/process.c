@@ -137,6 +137,7 @@ static void start_process(void* exec_) {
     /* Init user thread join related vars */
     cond_init(&t->pcb->join_cond);
     lock_init(&t->pcb->join_lock);
+    sema_init(&t->pcb->join_sema, 0);
 
     if (t->pcb->locks == NULL || t->pcb->semaphores == NULL) {
       success = false;
@@ -721,7 +722,9 @@ pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
    now, it does nothing. You may find it necessary to change the
    function signature. */
 bool setup_thread(void (**eip)(void), void** esp, void* aux) {
+  size_t ofs = PGSIZE - 8;
   uint8_t* kpage;
+  uint8_t* upage;
   bool success = false;
   thread_create_args_t* args = (thread_create_args_t*)aux;
 
@@ -735,17 +738,20 @@ bool setup_thread(void (**eip)(void), void** esp, void* aux) {
     One idea would be to mores strictly manage the list of threads and prune finished threads as needed when 
     a new thread is created. e.g. thread two is dead so we replace #2 with a newly rquested thread. */
     int offset = args->thread_count_id; // Easy way for now
-    success = install_page(((uint8_t*)PHYS_BASE) - offset * PGSIZE, kpage, true);
+    upage = ((uint8_t*)PHYS_BASE) - offset * PGSIZE;
+    success = install_page(upage, kpage, true);
     if (success) {
+      // ofs = PHYS_BASE - (offset - 1) * PGSIZE;
       *esp = PHYS_BASE - (offset - 1) * PGSIZE;
 
-      /* Add arg to stack */
-      memcpy(*esp, &args->arg, 4);
-      *esp -= 4;
+      /* Push function and args onto the stack */
+      if (push(kpage, &ofs, &args->tfun, sizeof &args->tfun) == NULL)
+        return false;
+      if (push(kpage, &ofs, &args->arg, sizeof &args->arg) == NULL)
+        return false;
 
-      /* Add tfun to stack */
-      memcpy(*esp, &args->tfun, 4);
-      *esp -= 4;
+      /* set the stack pointer */
+      *esp = upage + ofs;
 
     } else
       palloc_free_page(kpage);
@@ -887,9 +893,10 @@ tid_t pthread_join(tid_t tid) {
     }
 
     /* Conditionally sleep to wait for other thread to exit */
-    lock_acquire(&t->pcb->join_lock);
-    cond_wait(&t->pcb->join_cond, &t->pcb->join_lock);
-    lock_release(&t->pcb->join_lock);
+    // lock_acquire(&t->pcb->join_lock);
+    // cond_wait(&t->pcb->join_cond, &t->pcb->join_lock);
+    // lock_release(&t->pcb->join_lock);
+    sema_down(&t->pcb->join_sema);
   }
 
   return thread_entry->tid;
@@ -912,10 +919,10 @@ void pthread_exit(void) {
   thread_entry->completed = true;
 
   /* Signal any waiters */
-  lock_acquire(&t->pcb->join_lock);
-  cond_broadcast(&t->pcb->join_cond, &t->pcb->join_lock);
-  lock_release(&t->pcb->join_lock);
-  // sema_up(&t->pcb->join_sema);
+  // lock_acquire(&t->pcb->join_lock);
+  // cond_broadcast(&t->pcb->join_cond, &t->pcb->join_lock);
+  sema_up(&t->pcb->join_sema);
+  // lock_release(&t->pcb->join_lock);
 
   /* Exit thread */
   // thread_current()->status = THREAD_DYING;
