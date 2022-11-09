@@ -11,6 +11,7 @@
 #include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/gdt.h"
+#include "userprog/process.h"
 #endif
 
 /* Programmable Interrupt Controller (PIC) registers.
@@ -321,7 +322,7 @@ void intr_handler(struct intr_frame* frame) {
   intr_handler_func* handler;
 
   if (thread_current()->pcb->exiting) {
-    process_exit(0);
+    process_exit();
   }
 
   /* External interrupts are special.
