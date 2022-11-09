@@ -57,6 +57,8 @@ typedef struct thread_create_args {
   const void* arg;
   struct process* pcb;
   int thread_count_id;
+  struct semaphore load_done;
+  bool success;
 } thread_create_args_t;
 
 /* The process control block for a given process. Since
@@ -90,6 +92,9 @@ struct process {
   struct condition join_cond;
   struct lock join_lock;
   struct semaphore join_sema;
+
+  //set this to true if a thread calls process_exit
+  bool exiting;
 
   /* Holds all locks and semaphores for a given process */
   thread_lock_t locks[256];

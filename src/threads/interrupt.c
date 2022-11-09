@@ -320,6 +320,10 @@ void intr_handler(struct intr_frame* frame) {
   bool external;
   intr_handler_func* handler;
 
+  if (thread_current()->pcb->exiting) {
+    process_exit(0);
+  }
+
   /* External interrupts are special.
      We only handle one at a time (so interrupts must be off)
      and they need to be acknowledged on the PIC (see below).
