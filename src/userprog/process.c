@@ -795,8 +795,8 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   new_tid = thread_create((const char*)new_thread_name, PRI_DEFAULT, start_pthread, (void*)args);
   
   if (new_tid != TID_ERROR) {
-    sema_down(&args.load_done);
-    if (args.success)
+    sema_down(&args->load_done);
+    if (args->success)
       create_thread_entry(new_tid);
     else
       new_tid = TID_ERROR;
@@ -905,10 +905,11 @@ tid_t pthread_join(tid_t tid) {
 
   if (thread_entry->thread->exited == false) {
     thread_entry->thread->joiner = t;
-    sema_down(t->joining);
+    user_thread_entry_t* current_thread_entry = get_thread_entry(t->tid);
+    sema_down(&(current_thread_entry->joining));
   }
   int ret = thread_entry->tid;
-  list_remove(thread_entry->elem);
+  list_remove(&thread_entry->elem);
   lock_release(process_thread_lock);
   return ret;
 
@@ -965,7 +966,7 @@ void pthread_exit(void) {
   if (t->joiner != NULL) {
     sema_up(&t->joiner->joining);
   }
-  t->exited = true
+  t->exited = true;
   lock_release(&t->pcb->process_thread_lock);
   // sema_up(&t->pcb->join_sema);
 
@@ -984,6 +985,7 @@ void pthread_exit(void) {
    now, it does nothing. */
 void pthread_exit_main(void) {
   struct thread* t = thread_current();
+  struct list_elem* e;
 
   /* MArk thread as completed */
   user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
@@ -994,14 +996,14 @@ void pthread_exit_main(void) {
   if (t->joiner != NULL) {
     sema_up(&t->joiner->joining);
   }
-  struct list process_threads = t->pcb.user_thread_list.lst;
+  struct list process_threads = t->pcb->user_thread_list.lst;
   for (e = list_begin(&process_threads); e != list_end(&process_threads); e = list_next(e)) {
     user_thread_entry_t* userthread = list_entry(e, user_thread_entry_t, elem);
     pthread_join(userthread->tid);
   }
 
   lock_release(&t->pcb->process_thread_lock);
-  process_exit(0);
+  process_exit();
 }
 
 user_thread_entry_t* create_thread_entry(tid_t tid) {

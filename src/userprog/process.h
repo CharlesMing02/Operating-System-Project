@@ -29,6 +29,7 @@ typedef struct user_thread_entry {
   bool completed;
   bool initialized;
   struct list_elem elem;
+  struct semaphore joining;
 } user_thread_entry_t;
 
 typedef struct user_thread_list {
