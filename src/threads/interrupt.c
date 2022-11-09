@@ -321,7 +321,7 @@ void intr_handler(struct intr_frame* frame) {
   bool external;
   intr_handler_func* handler;
 
-  if (thread_current()->pcb->exiting) {
+  if (thread_current()->pcb && thread_current()->pcb->exiting) {
     process_exit();
   }
 
