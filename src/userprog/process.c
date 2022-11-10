@@ -887,13 +887,79 @@ static void start_pthread(void* exec_) {
 }
 
 /* Waits for thread with TID to die, if that thread was spawned
+ *    in the same process and has not been waited on yet. Returns TID on
+ *       success and returns TID_ERROR on failure immediately, without
+ *          waiting.
+ *
+ *             This function will be implemented in Project 2: Multithreading. For
+ *                now, it does nothing. */
+tid_t pthread_join(tid_t tid) {
+  struct thread* t = thread_current();
+  struct list_elem* e;
+  user_thread_entry_t* thread_entry;
+  struct lock* process_thread_lock = &thread_current()->pcb->process_thread_lock;
+  bool first_pass = true;
+
+  while (true) {
+
+    thread_entry = get_thread_entry(tid);
+    if (first_pass) {
+      lock_acquire(process_thread_lock);
+      if (!thread_entry || thread_entry->waited_on == true) {
+        lock_release(process_thread_lock);
+        return TID_ERROR;
+      } else {
+        thread_entry->waited_on = true;
+        lock_release(process_thread_lock);
+        first_pass = false;
+      }
+    }
+    if (thread_entry->completed == true) {
+      break;
+    }
+
+    /* Conditionally sleep to wait for other thread to exit */
+    lock_acquire(&t->pcb->join_lock);
+    cond_wait(&t->pcb->join_cond, &t->pcb->join_lock);
+    lock_release(&t->pcb->join_lock);
+  }
+
+  return thread_entry->tid;
+}
+
+/* Free the current thread's resources. Most resources will
+ *    be freed on thread_exit(), so all we have to do is deallocate the
+ *       thread's userspace stack. Wake any waiters on this thread.
+ *
+ *          The main thread should not use this function. See
+ *             pthread_exit_main() below.
+ *
+ *                This function will be implemented in Project 2: Multithreading. For
+ *                   now, it does nothing. */
+void pthread_exit(void) {
+  struct thread* t = thread_current();
+
+  /* MArk thread as completed */
+  user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
+  thread_entry->completed = true;
+
+  /* Signal any waiters */
+  lock_acquire(&t->pcb->join_lock);
+  cond_broadcast(&t->pcb->join_cond, &t->pcb->join_lock);
+  lock_release(&t->pcb->join_lock);
+
+  /* Exit thread */
+  thread_exit();
+}
+
+/* Waits for thread with TID to die, if that thread was spawned
    in the same process and has not been waited on yet. Returns TID on
    success and returns TID_ERROR on failure immediately, without
    waiting.
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-tid_t pthread_join(tid_t tid) {
+/*tid_t pthread_join(tid_t tid) {
   struct thread* t = thread_current();
   struct list_elem* e;
   user_thread_entry_t* thread_entry = NULL;
@@ -932,7 +998,7 @@ tid_t pthread_join(tid_t tid) {
 
 
   //not sure what is happening here so i commented it out
-  /*while (true && tmp < 20) {
+  while (true && tmp < 20) {
 
     thread_entry = get_thread_entry(tid);
     if (first_pass) {
@@ -954,12 +1020,12 @@ tid_t pthread_join(tid_t tid) {
     // lock_acquire(&t->pcb->join_lock);
     // cond_wait(&t->pcb->join_cond, &t->pcb->join_lock);
     // lock_release(&t->pcb->join_lock);
-    sema_down(&t->pcb->join_sema);
+    /*sema_down(&t->pcb->join_sema);
   }
 
 
   return thread_entry->tid;
-}
+}*/
 
 /* Free the current thread's resources. Most resources will
    be freed on thread_exit(), so all we have to do is deallocate the
@@ -970,23 +1036,23 @@ tid_t pthread_join(tid_t tid) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit(void) {
+/*void pthread_exit(void) {
   struct thread* t = thread_current();
-
+*/
   /* MArk thread as completed */
-  user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
+  /*user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
   thread_entry->completed = true;
-
+*/
   /* Signal any waiters */
   // lock_acquire(&t->pcb->join_lock);
   // cond_broadcast(&t->pcb->join_cond, &t->pcb->join_lock);
-  sema_up(&t->pcb->join_sema);
+  /*sema_up(&t->pcb->join_sema);*/
   // lock_release(&t->pcb->join_lock);
 
   /* Exit thread */
   // thread_current()->status = THREAD_DYING;
-  thread_exit();
-}
+  /*thread_exit();
+}*/
 
 /* Only to be used when the main thread explicitly calls pthread_exit.
    The main thread should wait on all threads in the process to
