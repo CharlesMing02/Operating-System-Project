@@ -783,6 +783,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   args->arg = arg;
   args->pcb = thread_current()->pcb;
   args->success = false;
+  sema_init(&args->load_done, 0);
 
   /* Synch here for counter increment */
   lock_acquire(process_thread_lock);
@@ -794,13 +795,21 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
 
   new_tid = thread_create((const char*)new_thread_name, PRI_DEFAULT, start_pthread, (void*)args);
   
-  if (new_tid != TID_ERROR) {
+  lock_acquire(process_thread_lock);
+  user_thread_entry = get_thread_entry(new_tid);
+  if (!user_thread_entry) {
+    create_thread_entry(new_tid);
+  }
+  lock_release(process_thread_lock);
+  return new_tid;
+  
+  /*if (new_tid != TID_ERROR) {
     sema_down(&args->load_done);
     if (args->success)
       create_thread_entry(new_tid);
     else
       new_tid = TID_ERROR;
-  }
+  }*/
 
   /* Double check for new thread entry and create as uninitialized if need be 
   in order to avoid race conditions on future potential joins */
@@ -839,10 +848,10 @@ static void start_pthread(void* exec_) {
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = setup_thread(&if_.eip, &if_.esp, exec_);
 
-  process_activate();
-
   args->success = success;
   sema_up(&args->load_done);
+
+  process_activate();
 
   /* Add itself to thread list or update if applicable */
   // Note: lock can only be accessed after pcb init
