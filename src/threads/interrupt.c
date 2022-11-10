@@ -11,6 +11,7 @@
 #include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/gdt.h"
+#include "userprog/process.h"
 #endif
 
 /* Programmable Interrupt Controller (PIC) registers.
@@ -319,6 +320,10 @@ static inline bool is_trap_from_userspace(struct intr_frame* frame) {
 void intr_handler(struct intr_frame* frame) {
   bool external;
   intr_handler_func* handler;
+
+  if (thread_current()->pcb && thread_current()->pcb->exiting) {
+    process_exit();
+  }
 
   /* External interrupts are special.
      We only handle one at a time (so interrupts must be off)

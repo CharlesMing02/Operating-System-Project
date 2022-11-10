@@ -99,7 +99,7 @@ struct thread {
 
   /* Additional user threads related meta data */
   bool exited;
-  struct thread* joiner;
+  struct user_thread_entry* joiner;
 
   int64_t wakeup_time;
   struct list_elem waiter;

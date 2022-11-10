@@ -242,6 +242,11 @@ void process_exit(void) {
   struct list_elem *e, *next;
   uint32_t* pd;
 
+  if (cur != cur->pcb->main_thread) {
+    cur->pcb->exiting = true;
+    pthread_exit();
+  }
+
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();
@@ -783,6 +788,8 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   args->tfun = tfun;
   args->arg = arg;
   args->pcb = thread_current()->pcb;
+  args->success = false;
+  sema_init(&args->load_done, 0);
 
   /* Synch here for counter increment */
   lock_acquire(process_thread_lock);
@@ -793,16 +800,32 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
            args->thread_count_id);
 
   new_tid = thread_create((const char*)new_thread_name, PRI_DEFAULT, start_pthread, (void*)args);
-
-  /* Double check for new thread entry and create as uninitialized if need be 
-  in order to avoid race conditions on future potential joins */
+  
   lock_acquire(process_thread_lock);
   user_thread_entry = get_thread_entry(new_tid);
   if (!user_thread_entry) {
     create_thread_entry(new_tid);
   }
   lock_release(process_thread_lock);
+  return new_tid;
+  
+  /*if (new_tid != TID_ERROR) {
+    sema_down(&args->load_done);
+    if (args->success)
+      create_thread_entry(new_tid);
+    else
+      new_tid = TID_ERROR;
+  }*/
 
+  /* Double check for new thread entry and create as uninitialized if need be 
+  in order to avoid race conditions on future potential joins */
+  /*lock_acquire(process_thread_lock);
+  user_thread_entry = get_thread_entry(new_tid);
+  if (!user_thread_entry) {
+    create_thread_entry(new_tid);
+  }
+  lock_release(process_thread_lock);
+*/
   return new_tid;
 }
 
@@ -831,6 +854,9 @@ static void start_pthread(void* exec_) {
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = setup_thread(&if_.eip, &if_.esp, exec_);
 
+  args->success = success;
+  sema_up(&args->load_done);
+
   process_activate();
 
   /* Add itself to thread list or update if applicable */
@@ -842,6 +868,7 @@ static void start_pthread(void* exec_) {
     user_thread_entry = create_thread_entry(t->tid);
   }
   user_thread_entry->initialized = true;
+  sema_init(&user_thread_entry->joining, 0);
   lock_release(process_thread_lock);
 
   /* Free any malloced data as necessary */
@@ -869,12 +896,43 @@ static void start_pthread(void* exec_) {
 tid_t pthread_join(tid_t tid) {
   struct thread* t = thread_current();
   struct list_elem* e;
-  user_thread_entry_t* thread_entry;
+  user_thread_entry_t* thread_entry = NULL;
   struct lock* process_thread_lock = &thread_current()->pcb->process_thread_lock;
+  user_thread_list_t user_thread_list = t->pcb->user_thread_list;
   bool first_pass = true;
   int tmp = 0;
+  //struct thread* joinee = NULL;
 
-  while (true && tmp < 20) {
+  lock_acquire(process_thread_lock);
+  for (e = list_begin(&user_thread_list.lst); e != list_end(&user_thread_list.lst); e = list_next(e)) {
+    user_thread_entry_t* user_thread_entry = list_entry(e, user_thread_entry_t, elem);
+    if (user_thread_entry->tid == tid) {
+      //exists = true;
+      thread_entry = user_thread_entry;
+      break;
+    }
+  }
+
+  if (thread_entry == NULL) {
+    lock_release(process_thread_lock);
+    return TID_ERROR;
+  }
+
+  if (thread_entry->thread->exited == false) {
+    thread_entry->thread->joiner = t;
+    user_thread_entry_t* current_thread_entry = get_thread_entry(t->tid);
+    sema_down(&(current_thread_entry->joining));
+  }
+  int ret = thread_entry->tid;
+  list_remove(&thread_entry->elem);
+  lock_release(process_thread_lock);
+  return ret;
+
+  lock_release(process_thread_lock);
+
+
+  //not sure what is happening here so i commented it out
+  /*while (true && tmp < 20) {
 
     thread_entry = get_thread_entry(tid);
     if (first_pass) {
@@ -891,13 +949,14 @@ tid_t pthread_join(tid_t tid) {
     if (thread_entry->completed == true) {
       break;
     }
-
+*/
     /* Conditionally sleep to wait for other thread to exit */
     // lock_acquire(&t->pcb->join_lock);
     // cond_wait(&t->pcb->join_cond, &t->pcb->join_lock);
     // lock_release(&t->pcb->join_lock);
     sema_down(&t->pcb->join_sema);
   }
+
 
   return thread_entry->tid;
 }
@@ -937,7 +996,28 @@ void pthread_exit(void) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit_main(void) {}
+void pthread_exit_main(void) {
+  struct thread* t = thread_current();
+  struct list_elem* e;
+
+  /* MArk thread as completed */
+  user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
+  thread_entry->completed = true;
+
+  /* Signal any waiters */
+  lock_acquire(&t->pcb->process_thread_lock);
+  if (t->joiner != NULL) {
+    sema_up(&t->joiner->joining);
+  }
+  struct list process_threads = t->pcb->user_thread_list.lst;
+  for (e = list_begin(&process_threads); e != list_end(&process_threads); e = list_next(e)) {
+    user_thread_entry_t* userthread = list_entry(e, user_thread_entry_t, elem);
+    pthread_join(userthread->tid);
+  }
+
+  lock_release(&t->pcb->process_thread_lock);
+  process_exit();
+}
 
 user_thread_entry_t* create_thread_entry(tid_t tid) {
   struct thread* t = thread_current();
