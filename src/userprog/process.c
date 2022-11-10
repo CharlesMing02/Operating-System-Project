@@ -727,10 +727,11 @@ pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
    now, it does nothing. You may find it necessary to change the
    function signature. */
 bool setup_thread(void (**eip)(void), void** esp, void* aux) {
-  size_t ofs = PGSIZE - 8;
+  size_t ofs = PGSIZE - 12;
   uint8_t* kpage;
   uint8_t* upage;
   bool success = false;
+  char* const null = NULL;
   thread_create_args_t* args = (thread_create_args_t*)aux;
 
   /* Set eip to stub function */
@@ -750,10 +751,10 @@ bool setup_thread(void (**eip)(void), void** esp, void* aux) {
       *esp = PHYS_BASE - (offset - 1) * PGSIZE;
 
       /* Push function and args onto the stack */
-      if (push(kpage, &ofs, &args->tfun, sizeof &args->tfun) == NULL)
-        return false;
-      if (push(kpage, &ofs, &args->arg, sizeof &args->arg) == NULL)
-        return false;
+      if (push(kpage, &ofs, &args->arg, sizeof args->arg) == NULL ||
+          push(kpage, &ofs, &args->tfun, sizeof args->tfun) == NULL ||
+          push(kpage, &ofs, &null, sizeof null) == NULL)
+          return false;
 
       /* set the stack pointer */
       *esp = upage + ofs;
