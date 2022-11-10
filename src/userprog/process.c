@@ -739,6 +739,7 @@ bool setup_thread(void (**eip)(void), void** esp, void* aux) {
 
   /* Setup the stack and eip */
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  args->kpage = kpage;
   if (kpage != NULL) {
     /* We need to offset this further each thread, not quite sure how we would reclaim theses spaces. 
     One idea would be to mores strictly manage the list of threads and prune finished threads as needed when 
@@ -790,6 +791,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   args->arg = arg;
   args->pcb = thread_current()->pcb;
   args->success = false;
+  args->kpage = NULL;
   sema_init(&args->load_done, 0);
 
   /* Synch here for counter increment */
@@ -869,6 +871,7 @@ static void start_pthread(void* exec_) {
     user_thread_entry = create_thread_entry(t->tid);
   }
   user_thread_entry->initialized = true;
+  user_thread_entry->kpage = args->kpage;
   sema_init(&user_thread_entry->joining, 0);
   lock_release(process_thread_lock);
 
@@ -938,16 +941,15 @@ tid_t pthread_join(tid_t tid) {
  *                   now, it does nothing. */
 void pthread_exit(void) {
   struct thread* t = thread_current();
-
-  /* MArk thread as completed */
   user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
+
   thread_entry->completed = true;
+  palloc_free_page(thread_entry->kpage);
 
   /* Signal any waiters */
   lock_acquire(&t->pcb->join_lock);
   cond_broadcast(&t->pcb->join_cond, &t->pcb->join_lock);
   lock_release(&t->pcb->join_lock);
-
   /* Exit thread */
   thread_exit();
 }
@@ -974,9 +976,13 @@ void pthread_exit_main(void) {
   lock_acquire(&t->pcb->process_thread_lock);
   for (e = list_begin(&user_thread_list); e != list_end(&user_thread_list); e = list_next(e)) {
     thread_entry = list_entry(e, user_thread_entry_t, elem);
-    thread_entry->thread->status = THREAD_DYING;
-    if (!thread_entry->waited_on) {
-      pthread_join(thread_entry->tid);
+    if (thread_entry->tid != thread_current()->tid && thread_entry->completed != true) {
+      thread_entry->completed = true;
+      palloc_free_page(thread_entry->kpage);
+      thread_entry->thread->status = THREAD_DYING;
+      if (!thread_entry->waited_on) {
+        pthread_join(thread_entry->tid);
+      }
     }
   }
   lock_release(&t->pcb->process_thread_lock);
@@ -986,6 +992,10 @@ void pthread_exit_main(void) {
     thread_entry = list_entry(e, user_thread_entry_t, elem);
     destroy_thread_entry(thread_entry);
   }
+
+  /* finally free the kpage and exit the process */
+  thread_entry = get_thread_entry(t->tid);
+  palloc_free_page(thread_entry->kpage);
 
   process_exit();
 }
