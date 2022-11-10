@@ -138,5 +138,6 @@ void pthread_exit(void);
 void pthread_exit_main(void);
 user_thread_entry_t* create_thread_entry(tid_t tid);
 user_thread_entry_t* get_thread_entry(tid_t tid);
+void destroy_thread_entry(user_thread_entry_t* thread_entry);
 
 #endif /* userprog/process.h */
