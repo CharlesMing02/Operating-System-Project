@@ -428,7 +428,7 @@ bool sys_lock_init(lock_t* lock) {
   }
 
   // thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
-  struct thread *t = thread_current();
+  struct thread* t = thread_current();
   for (uint8_t i = 0; i < 256; i++) {
     if (!t->pcb->locks[i].initialized) {
       lock_acquire(process_thread_lock);
@@ -506,7 +506,7 @@ bool sys_sema_init(sema_t* sema, int val) {
     return retval;
   }
 
-  struct thread *t = thread_current();
+  struct thread* t = thread_current();
   for (uint8_t i = 0; i < 256; i++) {
     if (!t->pcb->semaphores[i].initialized) {
       lock_acquire(process_thread_lock);
@@ -547,9 +547,7 @@ bool sys_sema_down(sema_t* sema) {
     retval = false;
     return retval;
   } else {
-    lock_acquire(process_thread_lock);
     sema_down(&thread_sema->sema);
-    lock_release(process_thread_lock);
     retval = true;
     return retval;
   }
@@ -566,9 +564,7 @@ bool sys_sema_up(sema_t* sema) {
     retval = false;
     return retval;
   } else {
-    lock_acquire(process_thread_lock);
     sema_up(&thread_sema->sema);
-    lock_release(process_thread_lock);
     retval = true;
     return retval;
   }
