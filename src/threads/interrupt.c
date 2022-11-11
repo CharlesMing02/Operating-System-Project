@@ -320,7 +320,6 @@ static inline bool is_trap_from_userspace(struct intr_frame* frame) {
 void intr_handler(struct intr_frame* frame) {
   bool external;
   intr_handler_func* handler;
- 
 
   /* External interrupts are special.
      We only handle one at a time (so interrupts must be off)
