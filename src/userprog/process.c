@@ -993,8 +993,8 @@ void pthread_exit_main(void) {
   thread_entry->completed = true;
 
   /* Signal any waiters */
-  for (e = list_begin(&thread_current()->pcb->user_thread_list.lst);
-       e != list_end(&thread_current()->pcb->user_thread_list.lst); e = list_next(e)) {
+  for (e = list_begin(&t->pcb->user_thread_list.lst);
+       e != list_end(&t->pcb->user_thread_list.lst); e = list_next(e)) {
 
     thread_entry = list_entry(e, user_thread_entry_t, elem);
 

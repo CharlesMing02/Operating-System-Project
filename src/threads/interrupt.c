@@ -322,9 +322,9 @@ void intr_handler(struct intr_frame* frame) {
   intr_handler_func* handler;
   struct thread* t = thread_current();
 
-  if (t->pcb && t->pcb->exiting) {
+  /*if (t->pcb && t->pcb->exiting) {
     process_exit();
-  }
+  }*/
 
   /* External interrupts are special.
      We only handle one at a time (so interrupts must be off)

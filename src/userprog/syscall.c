@@ -426,6 +426,7 @@ tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, void* arg) {
 void sys_pt_exit(void) {
   struct thread* t = thread_current();
   if (t->tid == t->pcb->main_thread->tid) {
+    t->pcb->wait_status->exit_code = 0;
     pthread_exit_main();
   } else {
     pthread_exit();
