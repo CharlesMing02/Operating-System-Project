@@ -943,21 +943,10 @@ tid_t pthread_join(tid_t tid) {
  *                   now, it does nothing. */
 void pthread_exit(void) {
   struct thread* t = thread_current();
-<<<<<<< HEAD
-
-  //lock_acquire(&t->pcb->process_thread_lock);
-  /* MArk thread as completed */
-=======
->>>>>>> modify-exit-functionality
   user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
 
   thread_entry->completed = true;
-<<<<<<< HEAD
-  t->pcb->user_thread_counter--;
-  //lock_release(&t->pcb->process_thread_lock);
-=======
   palloc_free_page(thread_entry->kpage);
->>>>>>> modify-exit-functionality
 
   /* Signal any waiters */
   lock_acquire(&t->pcb->join_lock);
@@ -976,19 +965,17 @@ void pthread_exit(void) {
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
 void pthread_exit_main(void) {
-
   struct thread* t = thread_current();
   struct list_elem* e;
   struct list user_thread_list = t->pcb->user_thread_list.lst;
   user_thread_entry_t* thread_entry;
-
-  lock_acquire(&t->pcb->process_thread_lock);
 
   /* MArk thread as completed */
   thread_entry = get_thread_entry(t->tid);
   thread_entry->completed = true;
 
   /* Signal any waiters */
+  lock_acquire(&t->pcb->process_thread_lock);
   for (e = list_begin(&user_thread_list); e != list_end(&user_thread_list); e = list_next(e)) {
     thread_entry = list_entry(e, user_thread_entry_t, elem);
     if (thread_entry->tid != thread_current()->tid && thread_entry->completed != true) {
@@ -1000,13 +987,13 @@ void pthread_exit_main(void) {
       }
     }
   }
+  lock_release(&t->pcb->process_thread_lock);
 
   while (!list_empty(&user_thread_list)) {
     e = list_pop_front(&user_thread_list);
     thread_entry = list_entry(e, user_thread_entry_t, elem);
     destroy_thread_entry(thread_entry);
   }
-  lock_release(&t->pcb->process_thread_lock);
 
   /* finally free the kpage and exit the process */
   thread_entry = get_thread_entry(t->tid);
