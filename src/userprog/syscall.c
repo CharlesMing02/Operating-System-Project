@@ -423,7 +423,15 @@ tid_t sys_pt_create(stub_fun sfun, pthread_fun tfun, void* arg) {
   return pthread_execute(sfun, tfun, arg);
 }
 
-void sys_pt_exit(void) { pthread_exit(); }
+void sys_pt_exit(void) {
+  struct thread* t = thread_current();
+  user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
+  if (thread_entry->tid == &thread_current()->pcb->main_thread->tid) {
+    pthread_exit_main();
+  } else {
+    pthread_exit();
+  }
+}
 
 tid_t sys_pt_join(tid_t tid) { return pthread_join(tid); }
 
