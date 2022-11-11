@@ -320,6 +320,11 @@ static inline bool is_trap_from_userspace(struct intr_frame* frame) {
 void intr_handler(struct intr_frame* frame) {
   bool external;
   intr_handler_func* handler;
+  struct thread* t = thread_current();
+
+  if (t->pcb && t->pcb->exiting) {
+    process_exit();
+  }
 
   /* External interrupts are special.
      We only handle one at a time (so interrupts must be off)
@@ -329,7 +334,6 @@ void intr_handler(struct intr_frame* frame) {
   if (external) {
     ASSERT(intr_get_level() == INTR_OFF);
     ASSERT(!intr_context());
-
 
     in_external_intr = true;
     yield_on_return = false;

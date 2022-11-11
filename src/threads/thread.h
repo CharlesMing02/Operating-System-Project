@@ -89,6 +89,9 @@ struct thread {
   int priority;              /* Priority. */
   struct list_elem allelem;  /* List element for all threads list. */
 
+  uint8_t* kpage;
+  uint8_t* upage;
+
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
 
@@ -107,7 +110,7 @@ struct thread {
   int effective_priority;
   struct list waiting_on;
   struct list acquired_locks;
-  
+
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
 };

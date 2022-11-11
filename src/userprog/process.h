@@ -29,8 +29,8 @@ typedef struct user_thread_entry {
   bool completed;
   bool initialized;
   uint8_t* kpage;
+  uint8_t* upage;
   struct list_elem elem;
-  struct semaphore joining;
 } user_thread_entry_t;
 
 typedef struct user_thread_list {
@@ -61,6 +61,7 @@ typedef struct thread_create_args {
   struct semaphore load_done;
   bool success;
   uint8_t* kpage;
+  uint8_t* upage;
 } thread_create_args_t;
 
 /* The process control block for a given process. Since

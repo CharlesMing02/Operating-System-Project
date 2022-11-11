@@ -129,6 +129,10 @@ static void start_process(void* exec_) {
       success = false;
     }
     user_thread_entry->thread = t;
+    user_thread_entry->tid = t->tid;
+    user_thread_entry->waited_on = false;
+    user_thread_entry->completed = false;
+    user_thread_entry->initialized = true;
     list_push_front((struct list*)&t->pcb->user_thread_list, &user_thread_entry->elem);
 
     /* Set user thread counter */
@@ -242,12 +246,10 @@ void process_exit(void) {
   struct list_elem *e, *next;
   uint32_t* pd;
 
-  if (cur != cur->pcb->main_thread) {
-    cur->pcb->exiting = true;
-    pthread_exit();
-  }
-
-  pthread_exit_main();
+  // if (cur != cur->pcb->main_thread) {
+  //   cur->pcb->exiting = true;
+  //   pthread_exit();
+  // }
 
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
@@ -688,11 +690,14 @@ static bool setup_stack(const char* cmd_line, void** esp) {
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
   if (kpage != NULL) {
     uint8_t* upage = ((uint8_t*)PHYS_BASE) - PGSIZE;
-    if (install_page(upage, kpage, true))
+    if (install_page(upage, kpage, true)) {
       success = init_cmd_line(kpage, upage, cmd_line, esp);
-    else
+      thread_current()->kpage = kpage;
+      thread_current()->upage = upage;
+    } else
       palloc_free_page(kpage);
   }
+
   return success;
 }
 
@@ -741,13 +746,18 @@ bool setup_thread(void (**eip)(void), void** esp, void* aux) {
 
   /* Setup the stack and eip */
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
-  args->kpage = kpage;
+
   if (kpage != NULL) {
     /* We need to offset this further each thread, not quite sure how we would reclaim theses spaces. 
     One idea would be to mores strictly manage the list of threads and prune finished threads as needed when 
     a new thread is created. e.g. thread two is dead so we replace #2 with a newly rquested thread. */
     int offset = args->thread_count_id; // Easy way for now
     upage = ((uint8_t*)PHYS_BASE) - offset * PGSIZE;
+
+    /* store pages for destroying later, will get pushed to thread list */
+    args->kpage = kpage;
+    args->upage = upage;
+
     success = install_page(upage, kpage, true);
     if (success) {
       // ofs = PHYS_BASE - (offset - 1) * PGSIZE;
@@ -794,6 +804,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   args->pcb = thread_current()->pcb;
   args->success = false;
   args->kpage = NULL;
+  args->upage = NULL;
   sema_init(&args->load_done, 0);
 
   /* Synch here for counter increment */
@@ -873,8 +884,12 @@ static void start_pthread(void* exec_) {
     user_thread_entry = create_thread_entry(t->tid);
   }
   user_thread_entry->initialized = true;
+
+  thread_current()->kpage = args->kpage;
+  thread_current()->upage = args->upage;
   user_thread_entry->kpage = args->kpage;
-  sema_init(&user_thread_entry->joining, 0);
+  user_thread_entry->upage = args->upage;
+
   lock_release(process_thread_lock);
 
   /* Free any malloced data as necessary */
@@ -946,7 +961,10 @@ void pthread_exit(void) {
   user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
 
   thread_entry->completed = true;
-  palloc_free_page(thread_entry->kpage);
+  // pagedir_clear_page(t->pcb->pagedir, thread_entry->upage);
+  // palloc_free_page(thread_entry->kpage);
+  pagedir_clear_page(t->pcb->pagedir, t->upage);
+  palloc_free_page(t->kpage);
 
   /* Signal any waiters */
   lock_acquire(&t->pcb->join_lock);
@@ -975,29 +993,28 @@ void pthread_exit_main(void) {
   thread_entry->completed = true;
 
   /* Signal any waiters */
-  lock_acquire(&t->pcb->process_thread_lock);
-  for (e = list_begin(&user_thread_list); e != list_end(&user_thread_list); e = list_next(e)) {
+  for (e = list_begin(&thread_current()->pcb->user_thread_list.lst);
+       e != list_end(&thread_current()->pcb->user_thread_list.lst); e = list_next(e)) {
+
     thread_entry = list_entry(e, user_thread_entry_t, elem);
+
     if (thread_entry->tid != thread_current()->tid && thread_entry->completed != true) {
       thread_entry->completed = true;
-      palloc_free_page(thread_entry->kpage);
-      thread_entry->thread->status = THREAD_DYING;
       if (!thread_entry->waited_on) {
         pthread_join(thread_entry->tid);
       }
     }
   }
-  lock_release(&t->pcb->process_thread_lock);
 
-  while (!list_empty(&user_thread_list)) {
-    e = list_pop_front(&user_thread_list);
-    thread_entry = list_entry(e, user_thread_entry_t, elem);
-    destroy_thread_entry(thread_entry);
-  }
+  // while (!list_empty(&user_thread_list)) {
+  //   e = list_pop_front(&user_thread_list);
+  //   thread_entry = list_entry(e, user_thread_entry_t, elem);
+  //   destroy_thread_entry(thread_entry);
+  // }
 
   /* finally free the kpage and exit the process */
-  thread_entry = get_thread_entry(t->tid);
-  palloc_free_page(thread_entry->kpage);
+  pagedir_clear_page(t->pcb->pagedir, t->upage);
+  palloc_free_page(t->kpage);
 
   process_exit();
 }
@@ -1030,10 +1047,9 @@ user_thread_entry_t* create_thread_entry(tid_t tid) {
 user_thread_entry_t* get_thread_entry(tid_t tid) {
   struct list_elem* e;
   user_thread_entry_t* thread_entry;
-  struct thread* t = thread_current();
 
-  for (e = list_begin(&t->pcb->user_thread_list.lst); e != list_end(&t->pcb->user_thread_list.lst);
-       e = list_next(e)) {
+  for (e = list_begin(&thread_current()->pcb->user_thread_list.lst);
+       e != list_end(&thread_current()->pcb->user_thread_list.lst); e = list_next(e)) {
     thread_entry = list_entry(e, user_thread_entry_t, elem);
 
     /* Return the current thread matches */
