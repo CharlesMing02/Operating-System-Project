@@ -247,6 +247,8 @@ void process_exit(void) {
     pthread_exit();
   }
 
+  pthread_exit_main();
+
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();
@@ -939,9 +941,13 @@ tid_t pthread_join(tid_t tid) {
 void pthread_exit(void) {
   struct thread* t = thread_current();
 
+  
+  //lock_acquire(&t->pcb->process_thread_lock);
   /* MArk thread as completed */
   user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
   thread_entry->completed = true;
+  t->pcb->user_thread_counter--;
+  //lock_release(&t->pcb->process_thread_lock);
 
   /* Signal any waiters */
   lock_acquire(&t->pcb->join_lock);
@@ -961,17 +967,20 @@ void pthread_exit(void) {
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
 void pthread_exit_main(void) {
+  
+
   struct thread* t = thread_current();
   struct list_elem* e;
   struct list user_thread_list = t->pcb->user_thread_list.lst;
   user_thread_entry_t* thread_entry;
+
+  lock_acquire(&t->pcb->process_thread_lock);
 
   /* MArk thread as completed */
   thread_entry = get_thread_entry(t->tid);
   thread_entry->completed = true;
 
   /* Signal any waiters */
-  lock_acquire(&t->pcb->process_thread_lock);
   for (e = list_begin(&user_thread_list); e != list_end(&user_thread_list); e = list_next(e)) {
     thread_entry = list_entry(e, user_thread_entry_t, elem);
     thread_entry->thread->status = THREAD_DYING;
@@ -979,15 +988,14 @@ void pthread_exit_main(void) {
       pthread_join(thread_entry->tid);
     }
   }
-  lock_release(&t->pcb->process_thread_lock);
 
   while (!list_empty(&user_thread_list)) {
     e = list_pop_front(&user_thread_list);
     thread_entry = list_entry(e, user_thread_entry_t, elem);
     destroy_thread_entry(thread_entry);
   }
+  lock_release(&t->pcb->process_thread_lock);
 
-  process_exit();
 }
 
 user_thread_entry_t* create_thread_entry(tid_t tid) {
@@ -1018,9 +1026,10 @@ user_thread_entry_t* create_thread_entry(tid_t tid) {
 user_thread_entry_t* get_thread_entry(tid_t tid) {
   struct list_elem* e;
   user_thread_entry_t* thread_entry;
+  struct thread* t = thread_current();
 
-  for (e = list_begin(&thread_current()->pcb->user_thread_list.lst);
-       e != list_end(&thread_current()->pcb->user_thread_list.lst); e = list_next(e)) {
+  for (e = list_begin(&t->pcb->user_thread_list.lst);
+       e != list_end(&t->pcb->user_thread_list.lst); e = list_next(e)) {
     thread_entry = list_entry(e, user_thread_entry_t, elem);
 
     /* Return the current thread matches */
