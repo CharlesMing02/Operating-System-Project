@@ -19,5 +19,4 @@ void test_main(void) {
   tid_t tid = pthread_check_create(thread_function, NULL);
   pthread_check_join(tid);
   msg("Main finished.");
-  pthread_exit();
 }
