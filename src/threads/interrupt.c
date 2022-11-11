@@ -331,10 +331,6 @@ void intr_handler(struct intr_frame* frame) {
     ASSERT(!intr_context());
 
 
-    if (thread_current()->pcb && thread_current()->pcb->exiting && is_trap_from_userspace(frame)) {
-      process_exit();
-    }
-
     in_external_intr = true;
     yield_on_return = false;
   }
@@ -354,6 +350,15 @@ void intr_handler(struct intr_frame* frame) {
   if (external) {
     ASSERT(intr_get_level() == INTR_OFF);
     ASSERT(intr_context());
+    
+    if (thread_current()->pcb && thread_current()->pcb->exiting && is_trap_from_userspace(frame)) {
+      if (thread_current() == thread_current()->pcb->main_thread) {
+        pthread_exit_main();
+      } else {
+        pthread_exit();
+      }
+    }
+
 
     in_external_intr = false;
     pic_end_of_interrupt(frame->vec_no);

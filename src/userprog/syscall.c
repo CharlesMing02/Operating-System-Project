@@ -168,8 +168,15 @@ int sys_halt(void) { shutdown_power_off(); }
 
 /* Exit system call. */
 int sys_exit(int exit_code) {
-  thread_current()->pcb->wait_status->exit_code = exit_code;
-  process_exit();
+  struct thread* cur = thread_current();
+  cur->pcb->wait_status->exit_code = exit_code;
+
+  if (cur != cur->pcb->main_thread) {
+    cur->pcb->exiting = true;
+    pthread_exit();
+  } else {
+    pthread_exit_main();
+  }
   NOT_REACHED();
 }
 
