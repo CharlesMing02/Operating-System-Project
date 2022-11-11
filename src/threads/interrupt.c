@@ -320,8 +320,9 @@ static inline bool is_trap_from_userspace(struct intr_frame* frame) {
 void intr_handler(struct intr_frame* frame) {
   bool external;
   intr_handler_func* handler;
+  struct thread* t = thread_current();
 
-  if (thread_current()->pcb && thread_current()->pcb->exiting) {
+  if (t->pcb && t->pcb->exiting) {
     process_exit();
   }
 
