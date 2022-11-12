@@ -122,18 +122,32 @@ static void start_process(void* exec_) {
     /* Initialize global per-process thread lock */
     lock_init(&t->pcb->process_thread_lock);
 
+    /* Initialize join status list and create join status for main thread */
+    list_init(&t->pcb->join_statuses);
+    struct join_status* join_status = calloc(1, sizeof(struct join_status));
+    if (join_status == NULL) {
+      success = false;
+    } else {
+      t->join_status = join_status;
+      join_status->tid = t->tid;
+      join_status->waited_on = false;
+      sema_init(&t->join_status->sema, 0);
+      list_push_front(&t->pcb->join_statuses, &join_status->elem);
+    }
+
     /* Initialize threads list and add main thread to head */
     list_init(&t->pcb->user_thread_list.lst);
     user_thread_entry = calloc(1, sizeof(user_thread_entry_t));
     if (user_thread_entry == NULL) {
       success = false;
+    } else {
+      user_thread_entry->thread = t;
+      user_thread_entry->tid = t->tid;
+      user_thread_entry->waited_on = false;
+      user_thread_entry->completed = false;
+      user_thread_entry->initialized = true;
+      list_push_front(&t->pcb->user_thread_list.lst, &user_thread_entry->elem);
     }
-    user_thread_entry->thread = t;
-    user_thread_entry->tid = t->tid;
-    user_thread_entry->waited_on = false;
-    user_thread_entry->completed = false;
-    user_thread_entry->initialized = true;
-    list_push_front((struct list*)&t->pcb->user_thread_list, &user_thread_entry->elem);
 
     /* Set user thread counter */
     t->pcb->user_thread_counter = 1;
@@ -265,6 +279,13 @@ void process_exit(void) {
     struct wait_status* cs = list_entry(e, struct wait_status, elem);
     next = list_remove(e);
     release_child(cs);
+  }
+
+  /* Free entries of join_statuses list. */
+  for (e = list_begin(&cur->pcb->join_statuses); e != list_end(&cur->pcb->join_statuses); e = next) {
+    struct join_status* js = list_entry(e, struct join_status, elem);
+    next = list_remove(e);
+    free(js);
   }
 
   /* Close all currently open file descriptors */
@@ -872,6 +893,7 @@ static void start_pthread(void* exec_) {
 
   args->success = success;
   sema_up(&args->load_done);
+  
 
   process_activate();
 
@@ -889,6 +911,15 @@ static void start_pthread(void* exec_) {
   thread_current()->upage = args->upage;
   user_thread_entry->kpage = args->kpage;
   user_thread_entry->upage = args->upage;
+
+  struct join_status* join_status = calloc(1, sizeof(struct join_status));
+  if (join_status != NULL) {
+    join_status->tid = t->tid;
+    join_status->waited_on = false;
+    sema_init(&join_status->sema, 0);
+    list_push_front(&t->pcb->join_statuses, &join_status->elem);
+    t->join_status = join_status;
+  }
 
   lock_release(process_thread_lock);
 
@@ -915,7 +946,21 @@ static void start_pthread(void* exec_) {
  *             This function will be implemented in Project 2: Multithreading. For
  *                now, it does nothing. */
 tid_t pthread_join(tid_t tid) {
-  struct thread* t = thread_current();
+  struct thread* cur = thread_current();
+  struct list_elem* e;
+
+  for (e = list_begin(&cur->pcb->join_statuses); e != list_end(&cur->pcb->join_statuses); e = list_next(e)) {
+    struct join_status* join_status = list_entry(e, struct join_status, elem);
+    if (join_status->tid == tid && !join_status->waited_on) {
+      join_status->waited_on = true;
+      sema_down(&join_status->sema);
+      list_remove(e);
+      free(join_status);
+      return tid;
+    }
+  }
+  return TID_ERROR;
+  /* struct thread* t = thread_current();
   user_thread_entry_t* thread_entry;
   struct lock* process_thread_lock = &thread_current()->pcb->process_thread_lock;
   bool first_pass = true;
@@ -939,12 +984,12 @@ tid_t pthread_join(tid_t tid) {
     }
 
     /* Conditionally sleep to wait for other thread to exit */
-    lock_acquire(&t->pcb->join_lock);
+    /*lock_acquire(&t->pcb->join_lock);
     cond_wait(&t->pcb->join_cond, &t->pcb->join_lock);
     lock_release(&t->pcb->join_lock);
   }
 
-  return thread_entry->tid;
+  return thread_entry->tid; */
 }
 
 /* Free the current thread's resources. Most resources will
@@ -958,6 +1003,11 @@ tid_t pthread_join(tid_t tid) {
  *                   now, it does nothing. */
 void pthread_exit(void) {
   struct thread* t = thread_current();
+
+  if (t == t->pcb->main_thread) {
+    pthread_exit_main();
+  }
+
   user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
 
   thread_entry->completed = true;
@@ -967,9 +1017,17 @@ void pthread_exit(void) {
   palloc_free_page(t->kpage);
 
   /* Signal any waiters */
-  lock_acquire(&t->pcb->join_lock);
+  /*lock_acquire(&t->pcb->join_lock);
   cond_broadcast(&t->pcb->join_cond, &t->pcb->join_lock);
-  lock_release(&t->pcb->join_lock);
+  lock_release(&t->pcb->join_lock);*/
+
+  /* Notify parent that we're dead, as the last thing we do. */
+  if (t->join_status != NULL) {
+    struct join_status* join_status = t->join_status;
+    sema_up(&join_status->sema);
+    //free(join_status);
+  }
+
   /* Exit thread */
   thread_exit();
 }
@@ -992,17 +1050,22 @@ void pthread_exit_main(void) {
   thread_entry = get_thread_entry(t->tid);
   thread_entry->completed = true;
 
-  /* Signal any waiters */
-  for (e = list_begin(&t->pcb->user_thread_list.lst);
-       e != list_end(&t->pcb->user_thread_list.lst); e = list_next(e)) {
+  /* Notify waiter that we're dead, as the last thing we do. */
+  if (t->join_status != NULL) {
+    struct join_status* join_status = t->join_status;
+    sema_up(&join_status->sema);
+    //free(join_status);
+  }
 
-    thread_entry = list_entry(e, user_thread_entry_t, elem);
+  struct join_status* join_status;
+  /* Join on all unjoined threads */
+  for (e = list_begin(&t->pcb->join_statuses);
+       e != list_end(&t->pcb->join_statuses); e = list_next(e)) {
 
-    if (thread_entry->tid != thread_current()->tid && thread_entry->completed != true) {
-      thread_entry->completed = true;
-      if (!thread_entry->waited_on) {
-        pthread_join(thread_entry->tid);
-      }
+    join_status = list_entry(e, struct join_status, elem);
+
+    if (join_status->tid != thread_current()->tid) {
+      pthread_join(join_status->tid);
     }
   }
 

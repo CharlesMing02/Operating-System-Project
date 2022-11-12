@@ -30,6 +30,7 @@ typedef struct user_thread_entry {
   bool initialized;
   uint8_t* kpage;
   uint8_t* upage;
+  //struct join_status* join_status;
   struct list_elem elem;
 } user_thread_entry_t;
 
@@ -62,6 +63,7 @@ typedef struct thread_create_args {
   bool success;
   uint8_t* kpage;
   uint8_t* upage;
+  struct join_status* join_status;
 } thread_create_args_t;
 
 /* The process control block for a given process. Since
@@ -73,6 +75,7 @@ struct process {
   /* Owned by process.c. */
   struct wait_status* wait_status; /* This process's completion status. */
   struct list children;            /* Completion status of children. */
+  struct list join_statuses;
   uint32_t* pagedir;               /* Page directory. */
   char process_name[16];           /* Name of the main thread */
   struct file* bin_file;           /* Executable. */

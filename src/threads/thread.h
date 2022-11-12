@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/fixed-point.h"
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -98,6 +99,7 @@ struct thread {
 #ifdef USERPROG
   /* Owned by process.c. */
   struct process* pcb; /* Process control block if this thread is a userprog */
+  struct join_status* join_status;
 #endif
 
   /* Additional user threads related meta data */
@@ -113,6 +115,13 @@ struct thread {
 
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
+};
+
+struct join_status {
+  struct list_elem elem; /* `join_statuses' list element. */
+  bool waited_on;
+  tid_t tid;             /* Join thread id. */
+  struct semaphore sema;
 };
 
 /* Types of scheduler that the user can request the kernel
