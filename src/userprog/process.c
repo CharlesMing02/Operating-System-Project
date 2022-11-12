@@ -809,7 +809,8 @@ bool setup_thread(void (**eip)(void), void** esp, void* aux) {
    should be similar to process_execute (). For now, it does nothing.
    */
 tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
-  struct lock* process_thread_lock = &thread_current()->pcb->process_thread_lock;
+  struct thread* t = thread_current();
+  struct lock* process_thread_lock = &t->pcb->process_thread_lock;
   char new_thread_name[21];
   tid_t new_tid;
   user_thread_entry_t* user_thread_entry;
@@ -822,7 +823,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   args->sfun = sfun;
   args->tfun = tfun;
   args->arg = arg;
-  args->pcb = thread_current()->pcb;
+  args->pcb = t->pcb;
   args->success = false;
   args->kpage = NULL;
   args->upage = NULL;
@@ -830,20 +831,23 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
 
   /* Synch here for counter increment */
   lock_acquire(process_thread_lock);
-  args->thread_count_id = ++thread_current()->pcb->user_thread_counter;
+  args->thread_count_id = ++t->pcb->user_thread_counter;
   lock_release(process_thread_lock);
 
-  snprintf(new_thread_name, 20, "%s-%d", thread_current()->pcb->main_thread->name,
+  snprintf(new_thread_name, 20, "%s-%d", t->pcb->main_thread->name,
            args->thread_count_id);
 
   new_tid = thread_create((const char*)new_thread_name, PRI_DEFAULT, start_pthread, (void*)args);
 
-  lock_acquire(process_thread_lock);
-  user_thread_entry = get_thread_entry(new_tid);
-  if (!user_thread_entry) {
-    create_thread_entry(new_tid);
+  if (new_tid != TID_ERROR) {
+    sema_down(&args->load_done);
+    lock_acquire(process_thread_lock);
+    user_thread_entry = get_thread_entry(new_tid);
+    if (!user_thread_entry) {
+      create_thread_entry(new_tid);
+    }
+    lock_release(process_thread_lock);
   }
-  lock_release(process_thread_lock);
   return new_tid;
 
   /*if (new_tid != TID_ERROR) {
@@ -922,6 +926,7 @@ static void start_pthread(void* exec_) {
   }
 
   lock_release(process_thread_lock);
+  sema_up(&args->load_done);
 
   /* Free any malloced data as necessary */
   // free(exec_);
@@ -949,16 +954,21 @@ tid_t pthread_join(tid_t tid) {
   struct thread* cur = thread_current();
   struct list_elem* e;
 
+
+  lock_acquire(&cur->pcb->process_thread_lock);
   for (e = list_begin(&cur->pcb->join_statuses); e != list_end(&cur->pcb->join_statuses); e = list_next(e)) {
     struct join_status* join_status = list_entry(e, struct join_status, elem);
     if (join_status->tid == tid && !join_status->waited_on) {
       join_status->waited_on = true;
+      lock_release(&cur->pcb->process_thread_lock);
       sema_down(&join_status->sema);
       list_remove(e);
       free(join_status);
       return tid;
     }
   }
+
+  lock_release(&cur->pcb->process_thread_lock);
   return TID_ERROR;
   /* struct thread* t = thread_current();
   user_thread_entry_t* thread_entry;
@@ -1043,6 +1053,7 @@ void pthread_exit(void) {
 void pthread_exit_main(void) {
   struct thread* t = thread_current();
   struct list_elem* e;
+  struct list_elem* new_e;
   struct list user_thread_list = t->pcb->user_thread_list.lst;
   user_thread_entry_t* thread_entry;
 
@@ -1059,15 +1070,35 @@ void pthread_exit_main(void) {
 
   struct join_status* join_status;
   /* Join on all unjoined threads */
-  for (e = list_begin(&t->pcb->join_statuses);
+
+  lock_acquire(&t->pcb->process_thread_lock);
+  /*for (e = list_begin(&t->pcb->join_statuses);
        e != list_end(&t->pcb->join_statuses); e = list_next(e)) {
+*/
+  e = list_begin(&t->pcb->join_statuses);
+
+  while (e != list_end(&t->pcb->join_statuses)) {
+    new_e = list_next(e);
 
     join_status = list_entry(e, struct join_status, elem);
 
     if (join_status->tid != thread_current()->tid) {
+      lock_release(&t->pcb->process_thread_lock);
       pthread_join(join_status->tid);
+      lock_acquire(&t->pcb->process_thread_lock);
+    /*if (join_status->tid == join_status->tid && !join_status->waited_on) {
+      join_status->waited_on = true;
+      sema_down(&join_status->sema);
+      list_remove(e);
+      free(join_status);
+      return tid;
+    }*/
+
     }
+    e = new_e;
   }
+  lock_release(&t->pcb->process_thread_lock);
+  
 
   // while (!list_empty(&user_thread_list)) {
   //   e = list_pop_front(&user_thread_list);
