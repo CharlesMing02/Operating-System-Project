@@ -962,8 +962,8 @@ tid_t pthread_join(tid_t tid) {
       join_status->waited_on = true;
       lock_release(&cur->pcb->process_thread_lock);
       sema_down(&join_status->sema);
-      list_remove(e);
-      free(join_status);
+      //list_remove(e);
+      //free(join_status);
       return tid;
     }
   }
@@ -1081,6 +1081,8 @@ void pthread_exit_main(void) {
     new_e = list_next(e);
 
     join_status = list_entry(e, struct join_status, elem);
+    struct join_status* new_join_status = list_entry(new_e, struct join_status, elem);
+
 
     if (join_status->tid != thread_current()->tid) {
       lock_release(&t->pcb->process_thread_lock);
