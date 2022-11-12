@@ -63,6 +63,7 @@ typedef struct thread_create_args {
   bool success;
   uint8_t* kpage;
   uint8_t* upage;
+  int offset;
   struct join_status* join_status;
 } thread_create_args_t;
 
@@ -76,10 +77,10 @@ struct process {
   struct wait_status* wait_status; /* This process's completion status. */
   struct list children;            /* Completion status of children. */
   struct list join_statuses;
-  uint32_t* pagedir;               /* Page directory. */
-  char process_name[16];           /* Name of the main thread */
-  struct file* bin_file;           /* Executable. */
-  struct thread* main_thread;      /* Pointer to main thread */
+  uint32_t* pagedir;          /* Page directory. */
+  char process_name[16];      /* Name of the main thread */
+  struct file* bin_file;      /* Executable. */
+  struct thread* main_thread; /* Pointer to main thread */
 
   /* Owned by syscall.c. */
   struct list fds; /* List of file descriptors. */
@@ -105,6 +106,9 @@ struct process {
   /* Holds all locks and semaphores for a given process */
   thread_lock_t locks[256];
   thread_sema_t semaphores[256];
+
+  /* Bitmap for dynamically tracking freed pages by offset */
+  bool offsets[256];
 };
 
 /* Tracks the completion of a process.
@@ -145,5 +149,6 @@ void pthread_exit_main(void);
 user_thread_entry_t* create_thread_entry(tid_t tid);
 user_thread_entry_t* get_thread_entry(tid_t tid);
 void destroy_thread_entry(user_thread_entry_t* thread_entry);
+int get_lowest_offset(struct process* pcb);
 
 #endif /* userprog/process.h */

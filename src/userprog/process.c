@@ -152,6 +152,14 @@ static void start_process(void* exec_) {
     /* Set user thread counter */
     t->pcb->user_thread_counter = 1;
 
+    /* Init upage offset bitmap */
+
+    t->pcb->offsets[0] = true; // 0 is unusable
+    t->pcb->offsets[1] = true; // 1 is unusable
+    for (int i = 2; i < 256; i++) {
+      t->pcb->offsets[i] = false;
+    }
+
     /* Init user thread join related vars */
     cond_init(&t->pcb->join_cond);
     lock_init(&t->pcb->join_lock);
@@ -282,7 +290,8 @@ void process_exit(void) {
   }
 
   /* Free entries of join_statuses list. */
-  for (e = list_begin(&cur->pcb->join_statuses); e != list_end(&cur->pcb->join_statuses); e = next) {
+  for (e = list_begin(&cur->pcb->join_statuses); e != list_end(&cur->pcb->join_statuses);
+       e = next) {
     struct join_status* js = list_entry(e, struct join_status, elem);
     next = list_remove(e);
     free(js);
@@ -772,12 +781,14 @@ bool setup_thread(void (**eip)(void), void** esp, void* aux) {
     /* We need to offset this further each thread, not quite sure how we would reclaim theses spaces. 
     One idea would be to mores strictly manage the list of threads and prune finished threads as needed when 
     a new thread is created. e.g. thread two is dead so we replace #2 with a newly rquested thread. */
-    int offset = args->thread_count_id; // Easy way for now
+    // int offset = args->thread_count_id; // Easy way for now
+    int offset = get_lowest_offset(args->pcb);
     upage = ((uint8_t*)PHYS_BASE) - offset * PGSIZE;
 
     /* store pages for destroying later, will get pushed to thread list */
     args->kpage = kpage;
     args->upage = upage;
+    args->offset = offset;
 
     success = install_page(upage, kpage, true);
     if (success) {
@@ -797,6 +808,22 @@ bool setup_thread(void (**eip)(void), void** esp, void* aux) {
       palloc_free_page(kpage);
   }
   return success;
+}
+
+int get_lowest_offset(struct process* pcb) {
+  struct lock* process_thread_lock = &pcb->process_thread_lock;
+  for (int i = 0; i < 256; i++) {
+    if (pcb->offsets[i] == false) {
+      /* Synch here for bitmap flip */
+      lock_acquire(process_thread_lock);
+      pcb->offsets[i] = true;
+      lock_release(process_thread_lock);
+      return i;
+    }
+  }
+  /* Safety */
+  printf("NEED TO INCREASE OFFSET SIZE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+  NOT_REACHED();
 }
 
 /* Starts a new thread with a new user stack running SF, which takes
@@ -827,6 +854,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   args->success = false;
   args->kpage = NULL;
   args->upage = NULL;
+  args->offset = NULL;
   sema_init(&args->load_done, 0);
 
   /* Synch here for counter increment */
@@ -834,8 +862,7 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
   args->thread_count_id = ++t->pcb->user_thread_counter;
   lock_release(process_thread_lock);
 
-  snprintf(new_thread_name, 20, "%s-%d", t->pcb->main_thread->name,
-           args->thread_count_id);
+  snprintf(new_thread_name, 20, "%s-%d", t->pcb->main_thread->name, args->thread_count_id);
 
   new_tid = thread_create((const char*)new_thread_name, PRI_DEFAULT, start_pthread, (void*)args);
 
@@ -897,7 +924,6 @@ static void start_pthread(void* exec_) {
 
   args->success = success;
   sema_up(&args->load_done);
-  
 
   process_activate();
 
@@ -913,6 +939,7 @@ static void start_pthread(void* exec_) {
 
   thread_current()->kpage = args->kpage;
   thread_current()->upage = args->upage;
+  thread_current()->offset = args->offset;
   user_thread_entry->kpage = args->kpage;
   user_thread_entry->upage = args->upage;
 
@@ -954,9 +981,9 @@ tid_t pthread_join(tid_t tid) {
   struct thread* cur = thread_current();
   struct list_elem* e;
 
-
   lock_acquire(&cur->pcb->process_thread_lock);
-  for (e = list_begin(&cur->pcb->join_statuses); e != list_end(&cur->pcb->join_statuses); e = list_next(e)) {
+  for (e = list_begin(&cur->pcb->join_statuses); e != list_end(&cur->pcb->join_statuses);
+       e = list_next(e)) {
     struct join_status* join_status = list_entry(e, struct join_status, elem);
     if (join_status->tid == tid && !join_status->waited_on) {
       join_status->waited_on = true;
@@ -994,7 +1021,7 @@ tid_t pthread_join(tid_t tid) {
     }
 
     /* Conditionally sleep to wait for other thread to exit */
-    /*lock_acquire(&t->pcb->join_lock);
+  /*lock_acquire(&t->pcb->join_lock);
     cond_wait(&t->pcb->join_cond, &t->pcb->join_lock);
     lock_release(&t->pcb->join_lock);
   }
@@ -1013,6 +1040,7 @@ tid_t pthread_join(tid_t tid) {
  *                   now, it does nothing. */
 void pthread_exit(void) {
   struct thread* t = thread_current();
+  struct lock* process_thread_lock = &t->pcb->process_thread_lock;
 
   if (t == t->pcb->main_thread) {
     pthread_exit_main();
@@ -1025,6 +1053,11 @@ void pthread_exit(void) {
   // palloc_free_page(thread_entry->kpage);
   pagedir_clear_page(t->pcb->pagedir, t->upage);
   palloc_free_page(t->kpage);
+
+  /* Synch here for bitmap flip */
+  lock_acquire(process_thread_lock);
+  t->pcb->offsets[t->offset] = 0;
+  lock_release(process_thread_lock);
 
   /* Signal any waiters */
   /*lock_acquire(&t->pcb->join_lock);
@@ -1083,24 +1116,21 @@ void pthread_exit_main(void) {
     join_status = list_entry(e, struct join_status, elem);
     struct join_status* new_join_status = list_entry(new_e, struct join_status, elem);
 
-
     if (join_status->tid != thread_current()->tid) {
       lock_release(&t->pcb->process_thread_lock);
       pthread_join(join_status->tid);
       lock_acquire(&t->pcb->process_thread_lock);
-    /*if (join_status->tid == join_status->tid && !join_status->waited_on) {
+      /*if (join_status->tid == join_status->tid && !join_status->waited_on) {
       join_status->waited_on = true;
       sema_down(&join_status->sema);
       list_remove(e);
       free(join_status);
       return tid;
     }*/
-
     }
     e = new_e;
   }
   lock_release(&t->pcb->process_thread_lock);
-  
 
   // while (!list_empty(&user_thread_list)) {
   //   e = list_pop_front(&user_thread_list);

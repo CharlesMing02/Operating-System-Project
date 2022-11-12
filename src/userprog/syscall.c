@@ -486,8 +486,8 @@ bool sys_lock_acquire(lock_t* lock) {
     retval = false;
     return retval;
   } else {
-    lock_acquire(process_thread_lock);
     lock_acquire(&thread_lock->lock);
+    lock_acquire(process_thread_lock);
     thread_lock->tid = thread_current()->tid;
     lock_release(process_thread_lock);
     retval = true;
