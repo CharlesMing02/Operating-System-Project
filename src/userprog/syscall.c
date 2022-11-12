@@ -78,11 +78,11 @@ static void syscall_handler(struct intr_frame* f) {
   /* Get the system call. */
   copy_in(&call_nr, f->esp, sizeof call_nr);
   if (call_nr >= sizeof syscall_table / sizeof *syscall_table)
-    process_exit();
+    pthread_exit_main();
   sc = syscall_table + call_nr;
 
   if (sc->func == NULL)
-    process_exit();
+    pthread_exit_main();
 
   /* Get the system call arguments. */
   ASSERT(sc->arg_cnt <= sizeof args / sizeof *args);
@@ -127,33 +127,33 @@ static inline bool put_user(uint8_t* udst, uint8_t byte) {
 
 /* Copies SIZE bytes from user address USRC to kernel address
    DST.
-   Call process_exit() if any of the user accesses are invalid. */
+   Call pthread_exit_main() if any of the user accesses are invalid. */
 static void copy_in(void* dst_, const void* usrc_, size_t size) {
   uint8_t* dst = dst_;
   const uint8_t* usrc = usrc_;
 
   for (; size > 0; size--, dst++, usrc++)
     if (usrc >= (uint8_t*)PHYS_BASE || !get_user(dst, usrc))
-      process_exit();
+      pthread_exit_main();
 }
 
 /* Creates a copy of user string US in kernel memory
    and returns it as a page that must be freed with
    palloc_free_page().
    Truncates the string at PGSIZE bytes in size.
-   Call process_exit() if any of the user accesses are invalid. */
+   Call pthread_exit_main() if any of the user accesses are invalid. */
 static char* copy_in_string(const char* us) {
   char* ks;
   size_t length;
 
   ks = palloc_get_page(0);
   if (ks == NULL)
-    process_exit();
+    pthread_exit_main();
 
   for (length = 0; length < PGSIZE; length++) {
     if (us >= (char*)PHYS_BASE || !get_user(ks + length, us++)) {
       palloc_free_page(ks);
-      process_exit();
+      pthread_exit_main();
     }
 
     if (ks[length] == '\0')
@@ -262,7 +262,7 @@ static struct file_descriptor* lookup_fd(int handle) {
       return fd;
   }
 
-  process_exit();
+  pthread_exit_main();
   NOT_REACHED();
 }
 
@@ -288,7 +288,7 @@ int sys_read(int handle, void* udst_, unsigned size) {
   if (handle == STDIN_FILENO) {
     for (bytes_read = 0; (size_t)bytes_read < size; bytes_read++)
       if (udst >= (uint8_t*)PHYS_BASE || !put_user(udst++, input_getc()))
-        process_exit();
+        pthread_exit_main();
     return bytes_read;
   }
 
@@ -304,7 +304,7 @@ int sys_read(int handle, void* udst_, unsigned size) {
     /* Check that touching this page is okay. */
     if (!verify_user(udst)) {
       lock_release(&fs_lock);
-      process_exit();
+      pthread_exit_main();
     }
 
     /* Read from file into page. */
@@ -349,7 +349,7 @@ int sys_write(int handle, void* usrc_, unsigned size) {
     /* Check that we can touch this user page. */
     if (!verify_user(usrc)) {
       lock_release(&fs_lock);
-      process_exit();
+      pthread_exit_main();
     }
 
     /* Do the write. */
