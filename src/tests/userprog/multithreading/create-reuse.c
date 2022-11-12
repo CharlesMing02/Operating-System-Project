@@ -32,7 +32,7 @@ void thread_function(void* arg_) {
 }
 
 void test_main(void) {
-  // syn_msg = true;
+  syn_msg = true;
   msg("Main started");
 
   // Init global data structures and acquire hang lock
@@ -74,5 +74,5 @@ void test_main(void) {
     pthread_check_join(tids[i]);
 
   msg("Main finished");
-  // syn_msg = false;
+  syn_msg = false;
 }
