@@ -92,6 +92,7 @@ struct thread {
 
   uint8_t* kpage;
   uint8_t* upage;
+  int offset;
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
@@ -120,7 +121,7 @@ struct thread {
 struct join_status {
   struct list_elem elem; /* `join_statuses' list element. */
   bool waited_on;
-  tid_t tid;             /* Join thread id. */
+  tid_t tid; /* Join thread id. */
   struct semaphore sema;
 };
 
