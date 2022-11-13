@@ -964,14 +964,14 @@ tid_t pthread_join(tid_t tid) {
   struct thread* cur = thread_current();
   struct list_elem* e;
 
-  //lock_acquire(&cur->pcb->process_thread_lock);
+  lock_acquire(&cur->pcb->process_thread_lock);
   for (e = list_begin(&cur->pcb->join_statuses); e != list_end(&cur->pcb->join_statuses);
        e = list_next(e)) {
     struct join_status* join_status = list_entry(e, struct join_status, elem);
     if (join_status->tid == tid && !join_status->waited_on) {
       list_remove(e);
       join_status->waited_on = true;
-      //lock_release(&cur->pcb->process_thread_lock);
+      lock_release(&cur->pcb->process_thread_lock);
       sema_down(&join_status->sema);
       release_thread(join_status);
       return tid;
