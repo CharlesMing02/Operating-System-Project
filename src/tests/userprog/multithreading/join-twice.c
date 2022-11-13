@@ -11,13 +11,11 @@ struct joiner_thread_data {
   bool should_succeed;
 };
 
-
 // Global variables
 sema_t thread_sema;
 
 void thread_function(void* arg_);
 void joiner_function(void* arg_);
-void self_joiner_function(void* arg_);
 
 /* Prints that it started then downs a semaphore */
 void thread_function(void* arg_) {
@@ -34,15 +32,6 @@ void joiner_function(void* arg_) {
   else if (pthread_join(jtd->tid))
     fail("Should have failed.");
   msg("Finished joining");
-}
-
-/* Tries to join on itself */
-void self_joiner_function(void* arg_) {
-  struct self_joiner_thread_data* sjtd = (struct self_joiner_thread_data*)arg_;
-  sema_down(&sjtd->populate_sjtd); // Wait until tells us our TID
-  if (pthread_join(sjtd->self_tid))
-    fail("Should have failed.");
-  msg("Finished self joining");
 }
 
 void test_main(void) {
@@ -66,7 +55,7 @@ void test_main(void) {
   struct joiner_thread_data jtd_fail;
   jtd_fail.tid = child_tid;
   jtd_fail.should_succeed = false;
-  pthread_check_join(pthread_check_create(joiner_function, &jtd_fail));
+  tid_t joiner_tid_2 = pthread_check_create(joiner_function, &jtd_fail);
 
   // Up the hanging thread's semaphore so that it can proceed
   // Both it and the first joiner should finish
