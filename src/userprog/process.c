@@ -1132,6 +1132,17 @@ void pthread_exit_main(void) {
   }
   lock_release(&t->pcb->process_thread_lock);
 
+  for (int i = 0; i < 256; i++) {
+    thread_lock_t this_lock = t->pcb->locks[i]; 
+    this_lock.initialized = false; 
+    this_lock.tid = 0;
+  }
+  for (int i = 0; i < 256; i++) {
+    thread_sema_t this_sema = t->pcb->semaphores[i]; 
+    this_sema.initialized = false; 
+    //this_sema->tid = 0;
+  }
+
   // while (!list_empty(&user_thread_list)) {
   //   e = list_pop_front(&user_thread_list);
   //   thread_entry = list_entry(e, user_thread_entry_t, elem);
