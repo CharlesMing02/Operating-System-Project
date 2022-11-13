@@ -268,11 +268,6 @@ void process_exit(void) {
   struct list_elem *e, *next;
   uint32_t* pd;
 
-  // if (cur != cur->pcb->main_thread) {
-  //   cur->pcb->exiting = true;
-  //   pthread_exit();
-  // }
-
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
     thread_exit();
@@ -295,6 +290,14 @@ void process_exit(void) {
     struct join_status* js = list_entry(e, struct join_status, elem);
     next = list_remove(e);
     free(js);
+  }
+
+  /* Free entries of user threads list. */
+  for (e = list_begin(&cur->pcb->user_thread_list); e != list_end(&cur->pcb->user_thread_list);
+       e = next) {
+    user_thread_entry_t* user_thread = list_entry(e, user_thread_entry_t, elem);
+    next = list_remove(e);
+    free(user_thread);
   }
 
   /* Close all currently open file descriptors */
@@ -778,10 +781,6 @@ bool setup_thread(void (**eip)(void), void** esp, void* aux) {
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
 
   if (kpage != NULL) {
-    /* We need to offset this further each thread, not quite sure how we would reclaim theses spaces. 
-    One idea would be to mores strictly manage the list of threads and prune finished threads as needed when 
-    a new thread is created. e.g. thread two is dead so we replace #2 with a newly rquested thread. */
-    // int offset = args->thread_count_id; // Easy way for now
     int offset = get_lowest_offset(args->pcb);
     upage = ((uint8_t*)PHYS_BASE) - offset * PGSIZE;
 
@@ -868,32 +867,16 @@ tid_t pthread_execute(stub_fun sfun, pthread_fun tfun, void* arg) {
 
   if (new_tid != TID_ERROR) {
     sema_down(&args->load_done);
-    lock_acquire(process_thread_lock);
-    user_thread_entry = get_thread_entry(new_tid);
-    if (!user_thread_entry) {
-      create_thread_entry(new_tid);
+    if (args->success) {
+      lock_acquire(process_thread_lock);
+      user_thread_entry = get_thread_entry(new_tid);
+      if (!user_thread_entry) {
+        create_thread_entry(new_tid);
+      }
+      lock_release(process_thread_lock); 
     }
-    lock_release(process_thread_lock);
   }
-  return new_tid;
-
-  /*if (new_tid != TID_ERROR) {
-    sema_down(&args->load_done);
-    if (args->success)
-      create_thread_entry(new_tid);
-    else
-      new_tid = TID_ERROR;
-  }*/
-
-  /* Double check for new thread entry and create as uninitialized if need be 
-  in order to avoid race conditions on future potential joins */
-  /*lock_acquire(process_thread_lock);
-  user_thread_entry = get_thread_entry(new_tid);
-  if (!user_thread_entry) {
-    create_thread_entry(new_tid);
-  }
-  lock_release(process_thread_lock);
-*/
+  free(args);
   return new_tid;
 }
 
@@ -924,6 +907,8 @@ static void start_pthread(void* exec_) {
 
   args->success = success;
   sema_up(&args->load_done);
+  if (!success)
+    thread_exit();
 
   process_activate();
 
@@ -953,17 +938,7 @@ static void start_pthread(void* exec_) {
   }
 
   lock_release(process_thread_lock);
-  sema_up(&args->load_done);
 
-  /* Free any malloced data as necessary */
-  // free(exec_);
-  // if (!success) {
-  //   // remove from list and free user_thread_entry
-  //   lock_acquire(process_thread_lock);
-  //   list_remove(&user_thread_entry->elem);
-  //   free(user_thread_entry);
-  //   lock_release(process_thread_lock);
-  // }
 
   /* Start the user process by simulating a return from an interrupt */
   asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
@@ -989,44 +964,12 @@ tid_t pthread_join(tid_t tid) {
       join_status->waited_on = true;
       lock_release(&cur->pcb->process_thread_lock);
       sema_down(&join_status->sema);
-      //list_remove(e);
-      //free(join_status);
       return tid;
     }
   }
 
   lock_release(&cur->pcb->process_thread_lock);
   return TID_ERROR;
-  /* struct thread* t = thread_current();
-  user_thread_entry_t* thread_entry;
-  struct lock* process_thread_lock = &thread_current()->pcb->process_thread_lock;
-  bool first_pass = true;
-
-  while (true) {
-
-    thread_entry = get_thread_entry(tid);
-    if (first_pass) {
-      lock_acquire(process_thread_lock);
-      if (!thread_entry || thread_entry->waited_on == true) {
-        lock_release(process_thread_lock);
-        return TID_ERROR;
-      } else {
-        thread_entry->waited_on = true;
-        lock_release(process_thread_lock);
-        first_pass = false;
-      }
-    }
-    if (thread_entry->completed == true) {
-      break;
-    }
-
-    /* Conditionally sleep to wait for other thread to exit */
-  /*lock_acquire(&t->pcb->join_lock);
-    cond_wait(&t->pcb->join_cond, &t->pcb->join_lock);
-    lock_release(&t->pcb->join_lock);
-  }
-
-  return thread_entry->tid; */
 }
 
 /* Free the current thread's resources. Most resources will
@@ -1047,28 +990,21 @@ void pthread_exit(void) {
   }
 
   user_thread_entry_t* thread_entry = get_thread_entry(t->tid);
-
-  thread_entry->completed = true;
-  // pagedir_clear_page(t->pcb->pagedir, thread_entry->upage);
-  // palloc_free_page(thread_entry->kpage);
+  list_remove(&thread_entry->elem);
+  free(thread_entry);
+  
   pagedir_clear_page(t->pcb->pagedir, t->upage);
   palloc_free_page(t->kpage);
 
   /* Synch here for bitmap flip */
   lock_acquire(process_thread_lock);
-  t->pcb->offsets[t->offset] = 0;
+  t->pcb->offsets[t->offset] = false;
   lock_release(process_thread_lock);
-
-  /* Signal any waiters */
-  /*lock_acquire(&t->pcb->join_lock);
-  cond_broadcast(&t->pcb->join_cond, &t->pcb->join_lock);
-  lock_release(&t->pcb->join_lock);*/
 
   /* Notify parent that we're dead, as the last thing we do. */
   if (t->join_status != NULL) {
     struct join_status* join_status = t->join_status;
     sema_up(&join_status->sema);
-    //free(join_status);
   }
 
   /* Exit thread */
@@ -1090,26 +1026,22 @@ void pthread_exit_main(void) {
   struct list user_thread_list = t->pcb->user_thread_list.lst;
   user_thread_entry_t* thread_entry;
 
-  /* MArk thread as completed */
-  thread_entry = get_thread_entry(t->tid);
-  thread_entry->completed = true;
+  /* Free thread */
+  /*thread_entry = get_thread_entry(t->tid);
+  list_remove(&thread_entry->elem);
+  free(thread_entry);*/
 
   /* Notify waiter that we're dead, as the last thing we do. */
   if (t->join_status != NULL) {
     struct join_status* join_status = t->join_status;
     sema_up(&join_status->sema);
-    //free(join_status);
   }
 
   struct join_status* join_status;
   /* Join on all unjoined threads */
-
   lock_acquire(&t->pcb->process_thread_lock);
-  /*for (e = list_begin(&t->pcb->join_statuses);
-       e != list_end(&t->pcb->join_statuses); e = list_next(e)) {
-*/
-  e = list_begin(&t->pcb->join_statuses);
 
+  e = list_begin(&t->pcb->join_statuses);
   while (e != list_end(&t->pcb->join_statuses)) {
     new_e = list_next(e);
 
@@ -1120,13 +1052,6 @@ void pthread_exit_main(void) {
       lock_release(&t->pcb->process_thread_lock);
       pthread_join(join_status->tid);
       lock_acquire(&t->pcb->process_thread_lock);
-      /*if (join_status->tid == join_status->tid && !join_status->waited_on) {
-      join_status->waited_on = true;
-      sema_down(&join_status->sema);
-      list_remove(e);
-      free(join_status);
-      return tid;
-    }*/
     }
     e = new_e;
   }
@@ -1140,14 +1065,14 @@ void pthread_exit_main(void) {
   for (int i = 0; i < 256; i++) {
     thread_sema_t this_sema = t->pcb->semaphores[i]; 
     this_sema.initialized = false; 
-    //this_sema->tid = 0;
   }
 
-  // while (!list_empty(&user_thread_list)) {
-  //   e = list_pop_front(&user_thread_list);
-  //   thread_entry = list_entry(e, user_thread_entry_t, elem);
-  //   destroy_thread_entry(thread_entry);
-  // }
+  /*while (!list_empty(&user_thread_list)) {
+    e = list_pop_front(&user_thread_list);
+    thread_entry = list_entry(e, user_thread_entry_t, elem);
+    list_remove(e);
+    free(thread_entry);
+  }*/
 
   /* finally free the kpage and exit the process */
   pagedir_clear_page(t->pcb->pagedir, t->upage);
@@ -1161,8 +1086,7 @@ user_thread_entry_t* create_thread_entry(tid_t tid) {
 
   user_thread_entry_t* user_thread_entry = calloc(1, sizeof(user_thread_entry_t));
   if (user_thread_entry == NULL) {
-    /* TODO: How or even should we exit with failure? */
-    // exit(-1);
+    return NULL;
   }
 
   if (tid == t->tid) {
@@ -1176,7 +1100,7 @@ user_thread_entry_t* create_thread_entry(tid_t tid) {
   user_thread_entry->completed = false;
   user_thread_entry->initialized = false;
 
-  list_push_back((struct list*)&t->pcb->user_thread_list, &user_thread_entry->elem);
+  list_push_back(&t->pcb->user_thread_list.lst, &user_thread_entry->elem);
 
   return user_thread_entry;
 }

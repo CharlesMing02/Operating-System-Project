@@ -442,7 +442,6 @@ bool sys_lock_init(lock_t* lock) {
     return retval;
   }
 
-  // thread_lock_t* thread_lock = &thread_current()->pcb->locks[(uint8_t)*lock];
   struct thread* t = thread_current();
   for (uint8_t i = 0; i < 256; i++) {
     if (!t->pcb->locks[i].initialized) {
@@ -458,18 +457,6 @@ bool sys_lock_init(lock_t* lock) {
   }
   retval = false;
   return retval;
-
-  // this might be wrong, look into it tmr
-  // if (thread_lock->tid != 0) {
-  //   retval = false;
-  //   return retval;
-  // } else {
-  //   lock_acquire(process_thread_lock);
-  //   lock_init(&thread_lock->lock);
-  //   lock_release(process_thread_lock);
-  //   retval = true;
-  //   return retval;
-  // }
 }
 
 bool sys_lock_acquire(lock_t* lock) {
