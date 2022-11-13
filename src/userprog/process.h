@@ -95,11 +95,6 @@ struct process {
   /* Initialized threads counter for thread_naming */
   int user_thread_counter;
 
-  /* Conditional var related variables foe joins */
-  struct condition join_cond;
-  struct lock join_lock;
-  struct semaphore join_sema;
-
   //set this to true if a thread calls process_exit
   bool exiting;
 

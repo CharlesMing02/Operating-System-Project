@@ -160,11 +160,6 @@ static void start_process(void* exec_) {
       t->pcb->offsets[i] = false;
     }
 
-    /* Init user thread join related vars */
-    cond_init(&t->pcb->join_cond);
-    lock_init(&t->pcb->join_lock);
-    sema_init(&t->pcb->join_sema, 0);
-
     if (t->pcb->locks == NULL || t->pcb->semaphores == NULL) {
       success = false;
     }
