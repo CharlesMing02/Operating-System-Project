@@ -123,6 +123,8 @@ struct join_status {
   bool waited_on;
   tid_t tid; /* Join thread id. */
   struct semaphore sema;
+  int ref_cnt;
+  struct lock lock; 
 };
 
 /* Types of scheduler that the user can request the kernel

@@ -233,6 +233,17 @@ static void release_child(struct wait_status* cs) {
     free(cs);
 }
 
+static void release_thread(struct join_status* cs) {
+  int new_ref_cnt;
+
+  lock_acquire(&cs->lock);
+  new_ref_cnt = --cs->ref_cnt;
+  lock_release(&cs->lock);
+
+  if (new_ref_cnt == 0)
+    free(cs);
+}
+
 /* Waits for process with PID child_pid to die and returns its exit status.
    If it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If child_pid is invalid or if it was not a
@@ -927,6 +938,8 @@ static void start_pthread(void* exec_) {
   if (join_status != NULL) {
     join_status->tid = t->tid;
     join_status->waited_on = false;
+    join_status->ref_cnt = 2;
+    lock_init(&join_status->lock);
     sema_init(&join_status->sema, 0);
     list_push_front(&t->pcb->join_statuses, &join_status->elem);
     t->join_status = join_status;
@@ -956,9 +969,11 @@ tid_t pthread_join(tid_t tid) {
        e = list_next(e)) {
     struct join_status* join_status = list_entry(e, struct join_status, elem);
     if (join_status->tid == tid && !join_status->waited_on) {
+      list_remove(e);
       join_status->waited_on = true;
       lock_release(&cur->pcb->process_thread_lock);
       sema_down(&join_status->sema);
+      release_thread(join_status);
       return tid;
     }
   }
